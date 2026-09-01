@@ -11,6 +11,7 @@ export class MainStageScene extends Phaser.Scene {
   
   private movingPlatforms: Phaser.GameObjects.Sprite[] = [];
   private pipeMonsters: Phaser.GameObjects.Sprite[] = [];
+  private jumpPads: Phaser.GameObjects.Sprite[] = [];
   
   // Collectibles & Powerups
   private coins: Phaser.GameObjects.Sprite[] = [];
@@ -21,43 +22,45 @@ export class MainStageScene extends Phaser.Scene {
   
   private isOnPlatform: boolean = false;
   
-  // Main level spawn point
+  // Spawn points and safe position tracking
   private spawnX: number = 100;
   private spawnY: number = 100;
-  
-  // The spawn point currently active
   private activeSpawnX: number = 100;
   private activeSpawnY: number = 100;
-
-  // Tracks the exact last safe ground the player stood on for the Totem rewind
   private lastSafeX: number = 100;
   private lastSafeY: number = 100;
+  
+  // Smash Mechanics Tracking
+  private smashTriggers: Phaser.GameObjects.Zone[] = [];
+  private canSmash: boolean = false;
 
   private doorExitX: number = 0;
   private doorExitY: number = 0;
 
-  // --- LEADERBOARD STATS ---
+  // Stats & HUD
   private startTime: number = 0;
   private coinsCollected: number = 0;
   private enemiesKilled: number = 0;
-  
-  // --- HUD ---
   private hudText!: Phaser.GameObjects.Text;
   
-  // --- POWERUP STATES ---
+  // Powerup States
   private checkpointTimer?: Phaser.Time.TimerEvent;
-  
   private hasGun: boolean = false;
   private gunTimer?: Phaser.Time.TimerEvent;
-  
   private hasTotem: boolean = false;
   private isInvincible: boolean = false; 
+
+  // Jump control flags
+  private canJump: boolean = true;
+  private isNormalJump: boolean = false; 
+  private ignoreGroundJumpUntil: number = 0;
 
   constructor() {
     super('MainStageScene');
   }
 
   preload() {
+    // Load tilesets and tilemap
     this.load.image('levelobjects', 'assets/tilesets/LevelObjectTiles.png');
     this.load.image('landtiles', 'assets/tilesets/LandTiles_32_32.png');
     this.load.image('sky', 'assets/tilesets/sky.png');
@@ -68,21 +71,18 @@ export class MainStageScene extends Phaser.Scene {
     this.load.image('cloud2', 'assets/tilesets/cloud2.png');
     this.load.tilemapTiledJSON('stage1', 'assets/tilemaps/harder-main-stage.json');
 
+    // Load custom sprites and assets
     this.load.image('moving-platform-img', 'assets/sprites/moving-platform.png');
     this.load.image('pipe-monster', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
-    
-    // CHANGED: Updated frame dimensions to 24x24
-    this.load.spritesheet('coin', 'assets/sprites/Coin_24x24_Anim.png', {
-      frameWidth: 24,
-      frameHeight: 24
-    });
+    this.load.image('jump-pad-img', 'assets/sprites/jump-pad.png');
+    this.load.spritesheet('coin', 'assets/sprites/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
 
-    // Other placeholders
     this.load.image('temp-checkpoint', 'assets/sprites/temp-checkpoint.png');
     this.load.image('gun-powerup', 'assets/sprites/gun-powerup.png');
     this.load.image('totem', 'assets/sprites/totem.png');
     this.load.image('bullet', 'assets/sprites/bullet.png');
 
+    // Load player animations & sprites
     this.load.image('idle-r', 'assets/sprites/player/Melissa_Stand_R.png');
     this.load.image('idle-l', 'assets/sprites/player/Melissa_Stand_L.png');
     this.load.image('jump-r', 'assets/sprites/player/Melissa_Jump1_R.png');
@@ -90,14 +90,8 @@ export class MainStageScene extends Phaser.Scene {
     this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
     this.load.image('fall-l', 'assets/sprites/player/Melissa_Fall2_L.png');
 
-    this.load.spritesheet('walk-r', 'assets/sprites/player/Melissa_Walk_Anim_R.png', {
-      frameWidth: 32,
-      frameHeight: 32
-    });
-    this.load.spritesheet('walk-l', 'assets/sprites/player/Melissa_Walk_Anim_L.png', {
-      frameWidth: 32,
-      frameHeight: 32
-    });
+    this.load.spritesheet('walk-r', 'assets/sprites/player/Melissa_Walk_Anim_R.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('walk-l', 'assets/sprites/player/Melissa_Walk_Anim_L.png', { frameWidth: 32, frameHeight: 32 });
   }
 
   create() {
@@ -121,27 +115,33 @@ export class MainStageScene extends Phaser.Scene {
     const allTilesets = [levelObjectsTileset, landTileset, skyTileset,
       clouds1Tileset, cloud2Tileset, smallTreeTileset, largeTreeTileset, grassTileset];
 
-    const skyLayer = map.createLayer('Sky', allTilesets, 0, 0)
-    const treesLayer = map.createLayer('Trees', allTilesets, 0, 0)
+    // Create map layers
+    const skyLayer = map.createLayer('Sky', allTilesets, 0, 0);
+    const treesLayer = map.createLayer('Trees', allTilesets, 0, 0);
     const backgroundLayer = map.createLayer('Background', allTilesets, 0, 0);
     const groundLayer = map.createLayer('Ground', allTilesets, 0, 0);
     const oneWayLayer = map.createLayer('OneWayPlatforms', allTilesets, 0, 0);
     const hazardsLayer = map.createLayer('Hazards', allTilesets, 0, 0);
     const foregroundLayer = map.createLayer('Foreground', allTilesets, 0, 0);
+    const smashLayer = map.createLayer('SmashGround', allTilesets, 0, 0);
 
+    // Set layer depths
     skyLayer?.setDepth(0);
     treesLayer?.setDepth(1);
     backgroundLayer?.setDepth(2);
     groundLayer?.setDepth(3);
     oneWayLayer?.setDepth(4);
+    smashLayer?.setDepth(4);
     hazardsLayer?.setDepth(5);
     foregroundLayer?.setDepth(7);
 
+    // Configure layer collisions
     groundLayer?.setCollisionByExclusion([-1]);
     oneWayLayer?.setCollisionByExclusion([-1]);
     hazardsLayer?.setCollisionByExclusion([-1]);
+    smashLayer?.setCollisionByExclusion([-1]);
 
-    // Player Animations
+    // Setup player animations
     this.anims.create({
       key: 'walk-r-anim',
       frames: this.anims.generateFrameNumbers('walk-r', { start: 0, end: 3 }),
@@ -155,7 +155,7 @@ export class MainStageScene extends Phaser.Scene {
       repeat: -1
     });
 
-    // Coin Animation
+    // Setup coin animation
     this.anims.create({
       key: 'coin-spin',
       frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), 
@@ -163,6 +163,7 @@ export class MainStageScene extends Phaser.Scene {
       repeat: -1 
     });
 
+    // Initialize player spawn position
     const spawnObject = map.getObjectLayer('Objects')?.objects.find(obj => obj.name === 'Spawn');
     if (spawnObject && spawnObject.x !== undefined && spawnObject.y !== undefined) {
       this.spawnX = spawnObject.x;
@@ -178,12 +179,15 @@ export class MainStageScene extends Phaser.Scene {
     this.player.setDepth(4); 
     this.player.setBodySize(14, 24);
     this.player.setOffset(9, 8);
+    
+    // Ensure high maximum velocity limits so large power values execute fully
+    (this.player.body as Phaser.Physics.Arcade.Body).setMaxVelocity(10000, 10000);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    // --- LEADERBOARD & HUD SETUP ---
+    // Setup HUD and game stats
     this.startTime = this.time.now;
     this.hudText = this.add.text(16, 16, 'Time: 0s | Coins: 0 | Kills: 0', { 
       fontSize: '20px', 
@@ -195,13 +199,13 @@ export class MainStageScene extends Phaser.Scene {
     this.hudText.setScrollFactor(0);
     this.hudText.setDepth(10); 
     
-    // Create Bullet Group
+    // Create bullet group
     this.bullets = this.physics.add.group({ allowGravity: false });
     if (groundLayer) {
       this.physics.add.collider(this.bullets, groundLayer, (bullet) => bullet.destroy());
     }
 
-    // --- Door Teleport Setup ---
+    // Setup door teleportation
     const exitObject = map.getObjectLayer('Objects')?.objects.find(obj => obj.name === 'DoorExit');
     if (exitObject && exitObject.x !== undefined && exitObject.y !== undefined) {
       this.doorExitX = exitObject.x;
@@ -215,7 +219,7 @@ export class MainStageScene extends Phaser.Scene {
       
       this.physics.add.overlap(this.player, zone, () => {
         const pBody = this.player.body as Phaser.Physics.Arcade.Body;
-        const isGrounded = pBody.blocked.down || pBody.touching.down;
+        const isGrounded = pBody.blocked.down || this.isOnPlatform;
         
         if (Phaser.Input.Keyboard.JustDown(this.enterKey) && isGrounded) {
           this.player.setPosition(this.doorExitX, this.doorExitY);
@@ -224,16 +228,35 @@ export class MainStageScene extends Phaser.Scene {
       });
     });
 
-    // --- Tiled Moving Platforms Setup ---
+    // Setup moving platforms
     const platformObjects = map.createFromObjects('Objects', { name: 'MovingPlatform', key: 'moving-platform-img' });
-    platformObjects.forEach((obj: any) => {
+    const rawMapObjects = map.getObjectLayer('Objects')?.objects || [];
+    const rawPlatforms = rawMapObjects.filter((o: any) => o.name === 'MovingPlatform');
+
+    platformObjects.forEach((obj: any, index: number) => {
       this.physics.add.existing(obj);
       const platBody = obj.body as Phaser.Physics.Arcade.Body;
       platBody.allowGravity = false; 
       platBody.immovable = true;     
-      platBody.setVelocityX(250); 
-      platBody.setFriction(0, 0);
+      
+      let platSpeed = 250; 
+      let platFriction = 1;
+
+      const rawObj = rawPlatforms[index];
+      if (rawObj && rawObj.properties) {
+        const speedProp = rawObj.properties.find((p: any) => p.name.toLowerCase() === 'speed');
+        if (speedProp) platSpeed = speedProp.value;
+
+        const frictionProp = rawObj.properties.find((p: any) => p.name.toLowerCase() === 'friction');
+        if (frictionProp && frictionProp.value !== undefined) {
+          platFriction = Number(frictionProp.value);
+        }
+      }
+      
+      platBody.setVelocityX(platSpeed); 
+      platBody.setFriction(platFriction, 0); 
       obj.setData('startX', obj.x);
+      obj.setData('speed', platSpeed); 
       this.movingPlatforms.push(obj);
     });
 
@@ -247,7 +270,61 @@ export class MainStageScene extends Phaser.Scene {
       });
     }
 
-    // --- Pipe Monsters Setup ---
+    // Setup Jump Pads as fully solid pipes
+    const rawPads = rawMapObjects.filter((o: any) => o.name === 'JumpPad');
+    rawPads.forEach((rawObj: any) => {
+      const padSprite = this.physics.add.sprite(rawObj.x, rawObj.y, 'jump-pad-img') as Phaser.Physics.Arcade.Sprite;
+      padSprite.setDepth(4);
+      padSprite.setOrigin(0, 1);
+
+      if (rawObj.width && rawObj.height) {
+        padSprite.setDisplaySize(rawObj.width, rawObj.height);
+      }
+
+      let bouncePower = 800; 
+      if (rawObj.properties) {
+        const powerProp = rawObj.properties.find((p: any) => {
+          const propName = p.name ? p.name.toLowerCase() : '';
+          return propName === 'power' || propName === 'speed';
+        });
+        if (powerProp && powerProp.value !== undefined) {
+          bouncePower = Number(powerProp.value);
+        }
+      }
+
+      padSprite.setData('bouncePower', -Math.abs(bouncePower));
+
+      const padBody = padSprite.body as Phaser.Physics.Arcade.Body;
+      padBody.setAllowGravity(false);
+      padBody.setImmovable(true);
+      padBody.setSize(rawObj.width || padSprite.width, rawObj.height || padSprite.height);
+      padBody.setOffset(0, 0);
+
+      this.jumpPads.push(padSprite);
+    });
+
+    // Solid collider for Jump Pads: Acts as a normal wall from the side, but launches if touched from top
+    let lastBounceTime = 0;
+    if (this.jumpPads.length > 0) {
+      this.physics.add.collider(this.player, this.jumpPads, (_playerObj, padObj) => {
+        const pBody = (_playerObj as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.Body;
+        const padBody = (padObj as Phaser.GameObjects.Sprite).body as Phaser.Physics.Arcade.Body;
+        const currentTime = this.time.now;
+        
+        if (pBody.touching.down && padBody.touching.up && (currentTime - lastBounceTime > 300)) {
+          const padSprite = padObj as Phaser.GameObjects.Sprite;
+          const power = padSprite.getData('bouncePower');
+          
+          this.player.setVelocityY(power);
+          
+          this.isNormalJump = false; 
+          this.ignoreGroundJumpUntil = currentTime + 150;
+          lastBounceTime = currentTime;
+        }
+      });
+    }
+
+    // Setup pipe monsters
     const monsterObjects = map.createFromObjects('Objects', { name: 'PipeMonster', key: 'pipe-monster' });
     monsterObjects.forEach((obj: any) => {
       this.physics.add.existing(obj);
@@ -271,9 +348,7 @@ export class MainStageScene extends Phaser.Scene {
       );
     }
 
-    // --- Collectible Setup ---
-    
-    // 1. Coins
+    // Setup Collectibles natively as clean static bodies.
     const coinObjects = map.createFromObjects('Objects', { name: 'Coin', key: 'coin' });
     coinObjects.forEach((obj: any) => {
       this.physics.add.existing(obj, true); 
@@ -289,7 +364,6 @@ export class MainStageScene extends Phaser.Scene {
       });
     }
 
-    // 2. Temp Checkpoint
     const cpObjects = map.createFromObjects('Objects', { name: 'TempCheckpoint', key: 'temp-checkpoint' });
     cpObjects.forEach((obj: any) => {
       this.physics.add.existing(obj, true);
@@ -311,7 +385,6 @@ export class MainStageScene extends Phaser.Scene {
       });
     }
 
-    // 3. Gun Powerup
     const gunObjects = map.createFromObjects('Objects', { name: 'GunPowerup', key: 'gun-powerup' });
     gunObjects.forEach((obj: any) => {
       this.physics.add.existing(obj, true);
@@ -332,7 +405,6 @@ export class MainStageScene extends Phaser.Scene {
       });
     }
 
-    // 4. Totem
     const totemObjects = map.createFromObjects('Objects', { name: 'Totem', key: 'totem' });
     totemObjects.forEach((obj: any) => {
       this.physics.add.existing(obj, true);
@@ -346,8 +418,18 @@ export class MainStageScene extends Phaser.Scene {
         this.player.setTint(0xffd700); 
       });
     }
-    // ------------------------------------
+    
+    // Setup Smash trigger zones
+    const objectLayer = map.getObjectLayer('Objects');
+    if (objectLayer) {
+      const rawTriggers = objectLayer.objects.filter(obj => obj.name === 'SmashTrigger');
+      rawTriggers.forEach(obj => {
+        const zone = this.add.zone(obj.x! + (obj.width! / 2), obj.y! + (obj.height! / 2), obj.width!, obj.height!);
+        this.smashTriggers.push(zone);
+      });
+    }
 
+    // World colliders setup
     if (groundLayer) this.physics.add.collider(this.player, groundLayer);
 
     if (oneWayLayer) {
@@ -362,12 +444,32 @@ export class MainStageScene extends Phaser.Scene {
         this
       );
     }
+    
+    // Setup Smash Ground mechanics
+    if (smashLayer) {
+      this.physics.add.collider(
+        this.player, smashLayer, undefined,
+        (_playerObj, tile) => {
+          const t = tile as Phaser.Tilemaps.Tile;
+          if (t.index === -1) return false;
+          
+          const body = (_playerObj as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.Body;
+          if (body.velocity.y > 0 && this.canSmash) {
+            return false; 
+          }
+          
+          return body.velocity.y > 0 && body.bottom <= t.pixelY + 10;
+        },
+        this
+      );
+    }
 
     if (hazardsLayer) {
       this.physics.add.overlap(this.player, hazardsLayer, this.handlePlayerDeath,
         (_playerObj, tile) => (tile as Phaser.Tilemaps.Tile).index !== -1, this);
     }
 
+    // Camera and bounds configuration
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.cameras.main.startFollow(this.player);
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -386,24 +488,27 @@ export class MainStageScene extends Phaser.Scene {
       this.shootBullet();
     }
 
-    const speed = this.isOnPlatform ? 270 : 200; 
+    const speed = 200; 
     const jumpSpeed = 400; 
-    const shortHopCap = -150; 
-    
+    const shortHopCap = -150;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
+    // Update moving platforms loop
     this.movingPlatforms.forEach(plat => {
       const platBody = plat.body as Phaser.Physics.Arcade.Body;
       const startX = plat.getData('startX');
+      const platSpeed = plat.getData('speed'); 
+      
       if (plat.x > startX + 150) {
-        platBody.setVelocityX(-250);
+        platBody.setVelocityX(-platSpeed);
       } else if (plat.x < startX - 150) {
-        platBody.setVelocityX(250);
+        platBody.setVelocityX(platSpeed);
       }
     });
 
     this.player.setVelocityX(0);
 
+    // Handle horizontal movement inputs
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-speed);
       this.facing = 'left';
@@ -412,23 +517,50 @@ export class MainStageScene extends Phaser.Scene {
       this.facing = 'right';
     }
 
-    const isGrounded = body.blocked.down || body.touching.down;
+    // Strict structural check for grounding: Rely only on tilemap floors and moving platforms.
+    const isGrounded = body.blocked.down || this.isOnPlatform;
 
-    // --- Record Last Safe Position for Totem ---
+    // Save safe position for Totem powerup
     if (isGrounded && !this.isInvincible) {
       this.lastSafeX = this.player.x;
       this.lastSafeY = this.player.y - 10; 
     }
 
-    if (this.cursors.up.isDown && isGrounded) {
-      this.player.setVelocityY(-jumpSpeed);
+    // Check Smash trigger zone overlap
+    let touchingTrigger = false;
+    this.smashTriggers.forEach(zone => {
+      const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+      const pRect = new Phaser.Geom.Rectangle(pBody.x, pBody.y, pBody.width, pBody.height);
+      
+      if (Phaser.Geom.Intersects.RectangleToRectangle(pRect, zone.getBounds())) {
+        touchingTrigger = true;
+      }
+    });
+
+    if (touchingTrigger) {
+      this.canSmash = true; 
+    } else if (isGrounded) {
+      this.canSmash = false; 
     }
 
-    if (!this.cursors.up.isDown && body.velocity.y < shortHopCap) {
+    // Handle manual jumping input
+    if (isGrounded) {
+      if (this.cursors.up.isDown && this.canJump && this.time.now > this.ignoreGroundJumpUntil) {
+        this.player.setVelocityY(-jumpSpeed);
+        this.canJump = false;
+        this.isNormalJump = true; 
+      }
+    } else {
+      this.canJump = true;
+    }
+
+    // Handle variable jump height (short hop) ONLY for manual jumps
+    if (this.isNormalJump && !this.cursors.up.isDown && body.velocity.y < shortHopCap) {
       this.player.setVelocityY(shortHopCap);
+      this.isNormalJump = false; 
     }
 
-    this.updateAnimationState(body);
+    this.updateAnimationState(body, isGrounded);
     this.isOnPlatform = false;
   }
 
@@ -442,8 +574,7 @@ export class MainStageScene extends Phaser.Scene {
     });
   }
 
-  private updateAnimationState(body: Phaser.Physics.Arcade.Body) {
-    const isGrounded = body.blocked.down || body.touching.down;
+  private updateAnimationState(body: Phaser.Physics.Arcade.Body, isGrounded: boolean) {
     const isMovingHorizontally = body.velocity.x !== 0;
 
     if (!isGrounded) {
@@ -468,7 +599,7 @@ export class MainStageScene extends Phaser.Scene {
     }
   }
 
-  private handlePlayerDeath = (_playerObj: any, _tile: any) => {
+  private handlePlayerDeath = (_playerObj: any, _monsterObj: any) => {
     if (this.isInvincible) return;
 
     if (this.hasTotem) {
