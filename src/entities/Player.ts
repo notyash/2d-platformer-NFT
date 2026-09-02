@@ -8,6 +8,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public spaceKey: Phaser.Input.Keyboard.Key;
     public enterKey: Phaser.Input.Keyboard.Key;
 
+    // WASD Controls
+    public keyW!: Phaser.Input.Keyboard.Key;
+    public keyA!: Phaser.Input.Keyboard.Key;
+    public keyS!: Phaser.Input.Keyboard.Key;
+    public keyD!: Phaser.Input.Keyboard.Key;
+
     public facing: Facing = 'right';
     public canJump: boolean = true;
     public isNormalJump: boolean = false; 
@@ -49,6 +55,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.spaceKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.enterKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
+        // Setup WASD
+        this.keyW = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+        this.keyA = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.keyS = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+        this.keyD = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+
         this.bullets = scene.physics.add.group({ allowGravity: false });
     }
 
@@ -59,10 +71,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.setVelocityX(0);
 
-        if (this.cursors.left.isDown) { 
+        // Check Left Mouse Button
+        const pointer = this.scene.input.activePointer;
+        const isMouseJumpDown = Boolean(pointer && pointer.isDown && pointer.leftButtonDown());
+
+        // Support Arrow Keys, WASD, and Left Mouse Click for Jump
+        const isLeftDown = this.cursors.left.isDown || this.keyA.isDown;
+        const isRightDown = this.cursors.right.isDown || this.keyD.isDown;
+        const isUpDown = this.cursors.up.isDown || this.keyW.isDown || isMouseJumpDown;
+
+        if (isLeftDown) { 
             this.setVelocityX(-speed); 
             this.facing = 'left'; 
-        } else if (this.cursors.right.isDown) { 
+        } else if (isRightDown) { 
             this.setVelocityX(speed); 
             this.facing = 'right'; 
         }
@@ -73,7 +94,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         if (isGrounded) {
-            if (this.cursors.up.isDown && this.canJump && this.scene.time.now > this.ignoreGroundJumpUntil) {
+            if (isUpDown && this.canJump && this.scene.time.now > this.ignoreGroundJumpUntil) {
                 this.setVelocityY(-jumpSpeed); 
                 this.canJump = false; 
                 this.isNormalJump = true; 
@@ -83,7 +104,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.canJump = true;
         }
 
-        if (this.isNormalJump && !this.cursors.up.isDown && body.velocity.y < shortHopCap) {
+        // Variable Jump Height: releasing Up, W, or Left Click early cuts velocity into a short-hop
+        if (this.isNormalJump && !isUpDown && body.velocity.y < shortHopCap) {
             this.setVelocityY(shortHopCap); 
             this.isNormalJump = false; 
         }
@@ -123,7 +145,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         const bulletSpeed = 500;
-        const bulletLifespanMs = 600; // ~300px travel range (~9-10 tiles)
+        const bulletLifespanMs = 600;
 
         bullet.setVelocityX(isRight ? bulletSpeed : -bulletSpeed);
         this.soundManager?.playShoot();

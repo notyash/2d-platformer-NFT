@@ -14,11 +14,11 @@ export class CollectiblesManager {
     private map!: Phaser.Tilemaps.Tilemap;
 
     private coinSprites: Phaser.GameObjects.Sprite[] = [];
-    private cpSprites: Phaser.GameObjects.Sprite[] = [];
     private gunSprites: Phaser.GameObjects.Sprite[] = [];
     private totemSprites: Phaser.GameObjects.Sprite[] = [];
 
     public coinsCollected: number = 0;
+    private collectedItemKeys: Set<string> = new Set();
 
     constructor(
         scene: Phaser.Scene, 
@@ -34,14 +34,21 @@ export class CollectiblesManager {
         this.soundManager = soundManager;
     }
 
-    setupCollectibles(map: Phaser.Tilemaps.Tilemap) {
-        this.map = map;
-        this.spawnAllCollectibles(true);
+    public addCoins(amount: number = 1) {
+        this.coinsCollected += amount;
     }
 
-    public spawnAllCollectibles(forceRespawnCP: boolean = true) {
-        // Clear & Spawn Coins
+    setupCollectibles(map: Phaser.Tilemaps.Tilemap) {
+        this.map = map;
+        this.spawnAllCollectibles();
+    }
+
+    public spawnAllCollectibles() {
+        // Clear existing sprites
         this.coinSprites.forEach(s => { if (s && s.active) s.destroy(); });
+        this.gunSprites.forEach(s => { if (s && s.active) s.destroy(); });
+        this.totemSprites.forEach(s => { if (s && s.active) s.destroy(); });
+
         this.coinSprites = this.createGroup('Coin', 'coin', 'coin-spin', (c) => {
             this.uiManager.showFloatingText(c.x, c.y - 10, '+1 COIN', '#FFD700');
             this.uiManager.spawnParticles(c.x, c.y, 0xFFD700);
@@ -49,8 +56,6 @@ export class CollectiblesManager {
             this.soundManager?.playCoin();
         });
 
-        // Clear & Spawn Guns
-        this.gunSprites.forEach(s => { if (s && s.active) s.destroy(); });
         this.gunSprites = this.createGroup('GunPowerup', 'gun-powerup', 'gun-anim', (g) => {
             this.uiManager.showFloatingText(g.x, g.y - 10, '+1 BLASTER [SLOT 1]', '#00FFFF');
             this.uiManager.spawnParticles(g.x, g.y, 0x00FFFF);
@@ -59,8 +64,6 @@ export class CollectiblesManager {
             this.soundManager?.playPowerup();
         });
 
-        // Clear & Spawn Totems
-        this.totemSprites.forEach(s => { if (s && s.active) s.destroy(); });
         this.totemSprites = this.createGroup('Totem', 'totem', 'totem-anim', (t) => {
             this.uiManager.showFloatingText(t.x, t.y - 10, '+1 SHIELD [SLOT 2]', '#FFD700');
             this.uiManager.spawnParticles(t.x, t.y, 0xFFD700);
@@ -68,38 +71,40 @@ export class CollectiblesManager {
             this.inventoryManager.addTotem();
             this.soundManager?.playPowerup();
         });
-
-        // Spawn Checkpoints only if forced OR if temp checkpoint is not currently active
-        if (forceRespawnCP || !this.inventoryManager.isTempCheckpointActive()) {
-            this.cpSprites.forEach(s => { if (s && s.active) s.destroy(); });
-            this.cpSprites = this.createGroup('TempCheckpoint', 'temp-checkpoint', 'cp-anim', (c) => {
-                this.uiManager.showFloatingText(c.x, c.y - 10, '+1 CHECKPOINT [SLOT 3]', '#D15FEE');
-                this.uiManager.spawnParticles(c.x, c.y, 0xD15FEE);
-                this.scene.cameras.main.shake(150, 0.006); 
-                this.inventoryManager.addCheckpoint();
-                this.soundManager?.playPowerup();
-            });
-        }
     }
 
-    public resetAll(forceRespawnCP: boolean = false) {
+    public resetAll() {
         this.coinsCollected = 0;
+        this.collectedItemKeys.clear();
         if (this.map) {
-            this.spawnAllCollectibles(forceRespawnCP);
+            this.spawnAllCollectibles();
         }
     }
 
     private createGroup(name: string, key: string, anim: string, onCollect: (obj: Phaser.GameObjects.Sprite) => void): Phaser.GameObjects.Sprite[] {
         const sprites: Phaser.GameObjects.Sprite[] = [];
         const objects = this.map.createFromObjects('Objects', { name, key });
+
         objects.forEach((obj: any) => {
+            const uniqueKey = `${name}_${Math.round(obj.x)}_${Math.round(obj.y)}`;
+
+            // Skip items already collected in this run
+            if (this.collectedItemKeys.has(uniqueKey)) {
+                obj.destroy();
+                return;
+            }
+
             this.scene.physics.add.existing(obj, true);
             obj.setDepth(4);
-            if (anim) obj.play(anim);
+            obj.setData('uniqueKey', uniqueKey);
+            if (anim && this.scene.anims.exists(anim)) {
+                obj.play(anim);
+            }
             this.addHoverTween(obj);
             sprites.push(obj);
 
             this.scene.physics.add.overlap(this.player, obj, () => {
+                this.collectedItemKeys.add(uniqueKey);
                 onCollect(obj);
                 const idx = sprites.indexOf(obj);
                 if (idx > -1) sprites.splice(idx, 1);

@@ -21,6 +21,8 @@ export class MainStageScene extends Phaser.Scene {
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
 
     // Hardcore Speedrun & Death State
+    private initialSpawnX: number = 100;
+    private initialSpawnY: number = 100;
     private startTime: number = 0;
     private totalPausedTime: number = 0;
     private pauseStartTime: number = 0;
@@ -34,7 +36,6 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     preload() {
-        // Keeps your exact original loading logic
         this.load.image('levelobjects', 'assets/tilesets/LevelObjectTiles.png');
         this.load.image('landtiles', 'assets/tilesets/LandTiles_32_32.png');
         this.load.image('sky', 'assets/tilesets/sky.png');
@@ -44,6 +45,9 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('grass', 'assets/tilesets/grass.png');
         this.load.image('cloud2', 'assets/tilesets/cloud2.png');
         this.load.tilemapTiledJSON('stage1', 'assets/tilemaps/harder-main-stage.json');
+
+        // Tileset overlays
+        this.load.image('plain-ground', 'assets/tilesets/plainGround.png');
 
         this.load.image('moving-platform-img', 'assets/sprites/moving-platform.png');
         this.load.image('pipe-monster', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
@@ -65,15 +69,17 @@ export class MainStageScene extends Phaser.Scene {
 
         const totemSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23B8860B" stroke-width="2"><polygon fill="%23FFD700" points="12,2 22,12 12,22 2,12"/><polygon fill="%23FFEA00" points="36,4 42,12 36,20 30,12"/><polygon fill="%23FFFF00" points="60,6 62,12 60,18 58,12"/><polygon fill="%23FFEA00" points="84,4 90,12 84,20 78,12"/></g></svg>`;
         const gunSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23008B8B" stroke-width="2"><rect fill="%2300FFFF" x="4" y="6" width="16" height="12" rx="4"/><rect fill="%23E0FFFF" x="28" y="8" width="16" height="8" rx="2"/><rect fill="%23FFFFFF" x="52" y="10" width="16" height="4" rx="1"/><rect fill="%23E0FFFF" x="76" y="8" width="16" height="8" rx="2"/></g></svg>`;
-        const cpSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%234B0082" stroke-width="2"><path fill="%239370DB" d="M 6 4 L 18 4 L 12 12 L 18 20 L 6 20 L 12 12 Z"/><path fill="%23AB82FF" d="M 32 6 L 40 6 L 36 12 L 40 18 L 32 18 L 36 12 Z"/><path fill="%23D15FEE" d="M 58 8 L 62 8 L 60 12 L 62 16 L 58 16 L 60 12 Z"/><path fill="%23AB82FF" d="M 80 6 L 88 6 L 84 12 L 88 18 L 80 18 L 84 12 Z"/></g></svg>`;
         const particleSvg = `data:image/svg+xml;charset=utf8,<svg width="8" height="8" xmlns="http://www.w3.org/2000/svg"><circle cx="4" cy="4" r="4" fill="%23FFFFFF"/></svg>`;
         const fireballSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23FF4500"/><circle cx="8" cy="8" r="5" fill="%23FF8C00"/><circle cx="8" cy="8" r="3" fill="%23FFFF00"/></svg>`;
-        
+        const enemyBulletSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23DC2626"/><circle cx="8" cy="8" r="5" fill="%23F87171"/><circle cx="8" cy="8" r="2.5" fill="%23FFFFFF"/></svg>`;
+        const windParticleSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="6" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="1" width="16" height="4" rx="2" fill="%23BAE6FD"/></svg>`;
+
         this.load.spritesheet('totem', totemSvg, { frameWidth: 24, frameHeight: 24 });
         this.load.spritesheet('gun-powerup', gunSvg, { frameWidth: 24, frameHeight: 24 });
-        this.load.spritesheet('temp-checkpoint', cpSvg, { frameWidth: 24, frameHeight: 24 });
         this.load.image('particle', particleSvg);
         this.load.image('fireball', fireballSvg);
+        this.load.image('enemy-bullet', enemyBulletSvg);
+        this.load.image('wind-particle', windParticleSvg);
 
         this.load.image('idle-r', 'assets/sprites/player/Melissa_Stand_R.png');
         this.load.image('idle-l', 'assets/sprites/player/Melissa_Stand_L.png');
@@ -92,13 +98,16 @@ export class MainStageScene extends Phaser.Scene {
 
         const rawMapObjects = map.getObjectLayer('Objects')?.objects || [];
         
-        // Find spawn
+        // Find initial spawn
         let spawnX = 100, spawnY = 100;
         const spawnObject = rawMapObjects.find(obj => obj.name === 'Spawn');
         if (spawnObject && spawnObject.x !== undefined && spawnObject.y !== undefined) {
             spawnX = spawnObject.x; 
             spawnY = spawnObject.y;
         }
+
+        this.initialSpawnX = spawnX;
+        this.initialSpawnY = spawnY;
 
         // Initialize Managers
         this.soundManager = new SoundManager(this);
@@ -112,13 +121,16 @@ export class MainStageScene extends Phaser.Scene {
 
         this.inventoryManager = new InventoryManager(this, this.player, this.uiManager, this.soundManager);
         this.envManager = new EnvironmentManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
-        this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.soundManager);
         this.collectiblesManager = new CollectiblesManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
+        this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.collectiblesManager, this.soundManager);
 
-        // Setup Entities
+        // Setup Entities & Level Objects
         this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer);
-        this.enemyManager.setupPipeMonsters(map);
+        this.enemyManager.setupPipeMonsters(map, rawMapObjects);
         
+        this.envManager.setupCheckpoints(rawMapObjects);
+        this.envManager.setupFakeGround(rawMapObjects);
+        this.envManager.setupWindZones(rawMapObjects);
         this.envManager.setupDoors(rawMapObjects);
         this.envManager.setupGunDisarmZones(rawMapObjects);
         this.envManager.setupMovingPlatforms(map, rawMapObjects);
@@ -128,12 +140,10 @@ export class MainStageScene extends Phaser.Scene {
         
         this.collectiblesManager.setupCollectibles(map);
 
-        // Listen for player death event (increments session deaths & resets stage)
+        // Listen for player death event
         this.events.on('player-death', () => {
             this.totalDeaths++;
-            this.collectiblesManager.resetAll(false); // preserves collected temp checkpoint while active
-            this.enemyManager.resetAll();
-            this.inventoryManager.onPlayerDeath();
+            this.enemyManager.clearBullets();
             this.player.bullets.clear(true, true);
         });
 
@@ -211,7 +221,6 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     private beforeUnloadHandler = (e: BeforeUnloadEvent) => {
-        // Only prompt if a run is active
         e.preventDefault();
         e.returnValue = '';
     };
@@ -253,20 +262,25 @@ export class MainStageScene extends Phaser.Scene {
         this.startTime = this.time.now;
         this.totalPausedTime = 0;
 
-        this.player.activeSpawnX = this.player.spawnX;
-        this.player.activeSpawnY = this.player.spawnY;
-        this.player.lastSafeX = this.player.spawnX;
-        this.player.lastSafeY = this.player.spawnY;
-        this.player.setPosition(this.player.spawnX, this.player.spawnY);
+        // Reset spawn back to stage entrance (0%)
+        this.player.spawnX = this.initialSpawnX;
+        this.player.spawnY = this.initialSpawnY;
+        this.player.activeSpawnX = this.initialSpawnX;
+        this.player.activeSpawnY = this.initialSpawnY;
+        this.player.lastSafeX = this.initialSpawnX;
+        this.player.lastSafeY = this.initialSpawnY;
+        this.player.setPosition(this.initialSpawnX, this.initialSpawnY);
         this.player.setVelocity(0, 0);
         this.player.hasGun = false;
         this.player.hasTotem = false;
         this.player.clearTint();
         this.player.bullets.clear(true, true);
 
-        this.collectiblesManager.resetAll(true); // force-respawns all collectibles on manual restart
+        this.collectiblesManager.resetAll();
         this.enemyManager.resetAll();
         this.inventoryManager.resetAll();
+        this.envManager.resetAll();
+        this.envManager.resetCheckpoints();
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8');
         this.soundManager.playPowerup();
@@ -296,6 +310,11 @@ export class MainStageScene extends Phaser.Scene {
         map.createLayer('Trees', allTilesets, 0, 0)?.setDepth(1);
         map.createLayer('Background', allTilesets, 0, 0)?.setDepth(2);
         
+        const transparentLayer = map.createLayer('Transparent', allTilesets, 0, 0);
+        if (transparentLayer) {
+            transparentLayer.setDepth(2.7);
+        }
+
         this.groundLayer = map.createLayer('Ground', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
         this.groundLayer.setDepth(3);
         this.groundLayer.setCollisionByExclusion([-1]);
@@ -325,7 +344,6 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'totem-anim', frames: this.anims.generateFrameNumbers('totem', { start: 0, end: 3 }), frameRate: 8, yoyo: true, repeat: -1 });
         this.anims.create({ key: 'gun-anim', frames: this.anims.generateFrameNumbers('gun-powerup', { start: 0, end: 3 }), frameRate: 12, yoyo: true, repeat: -1 });
-        this.anims.create({ key: 'cp-anim', frames: this.anims.generateFrameNumbers('temp-checkpoint', { start: 0, end: 3 }), frameRate: 8, yoyo: true, repeat: -1 });
         
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });

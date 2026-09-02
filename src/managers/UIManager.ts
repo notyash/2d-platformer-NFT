@@ -25,6 +25,15 @@ export class UIManager {
     private selectionHighlight?: Phaser.GameObjects.Graphics;
     private soundLabelRef?: Phaser.GameObjects.Text;
 
+    // Death Screen Container & State
+    private deathContainer?: Phaser.GameObjects.Container;
+    public isDeathScreenOpen: boolean = false;
+    private selectedDeathIndex: number = 0;
+    private deathOptions: MenuOption[] = [];
+    private deathButtonBoxes: Phaser.GameObjects.Rectangle[] = [];
+    private deathButtonLabels: Phaser.GameObjects.Text[] = [];
+    private deathHighlight?: Phaser.GameObjects.Graphics;
+
     // Keys for menu navigation
     private keyUp?: Phaser.Input.Keyboard.Key;
     private keyDown?: Phaser.Input.Keyboard.Key;
@@ -297,6 +306,157 @@ export class UIManager {
         if (this.pauseContainer) {
             this.pauseContainer.destroy();
             this.pauseContainer = undefined;
+        }
+    }
+
+    showDeathScreen(
+        onRestart: () => void,
+        stats: { time: string; deaths: number; coins: number; kills: number }
+    ) {
+        this.hideDeathScreen();
+        this.hidePauseMenu();
+        this.isDeathScreenOpen = true;
+        this.selectedDeathIndex = 0;
+
+        this.deathContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(150);
+
+        // Dark Crimson Vignette Backdrop
+        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x0a0000, 0.85)
+            .setInteractive();
+        this.deathContainer.add(backdrop);
+
+        // Modal Frame
+        const modalWidth = 420;
+        const modalHeight = 300;
+        const modalX = 640;
+        const modalY = 240;
+
+        const modalBg = this.scene.add.rectangle(modalX, modalY, modalWidth, modalHeight, 0x180808, 0.96)
+            .setStrokeStyle(2.5, 0xef4444, 0.95);
+        this.deathContainer.add(modalBg);
+
+        // Dramatic Title
+        const title = this.scene.add.text(modalX, modalY - 105, 'YOU DIED', {
+            fontSize: '32px', fontFamily: 'Arial', color: '#ef4444', stroke: '#450a0a', strokeThickness: 5, fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.deathContainer.add(title);
+
+        // Gentle pulse animation on title
+        this.scene.tweens.add({
+            targets: title,
+            scale: 1.06,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Subtitle / Prompt
+        const subtitle = this.scene.add.text(modalX, modalY - 65, 'Press ENTER or SPACE to Try Again', {
+            fontSize: '13px', fontFamily: 'Arial', color: '#fca5a5', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.deathContainer.add(subtitle);
+
+        // Stats Box Card
+        const statsBox = this.scene.add.rectangle(modalX, modalY - 18, 360, 50, 0x0f0404, 0.9)
+            .setStrokeStyle(1.5, 0x7f1d1d);
+        const statsText = this.scene.add.text(modalX, modalY - 18, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
+            fontSize: '12px', fontFamily: 'Arial', color: '#e2e8f0', align: 'center', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.deathContainer.add([statsBox, statsText]);
+
+        // Menu Option
+        this.deathOptions = [
+            { id: 'restart', label: 'Try Again (Restart Stage)', action: onRestart }
+        ];
+
+        this.deathButtonBoxes = [];
+        this.deathButtonLabels = [];
+
+        const btnY = modalY + 52;
+        const btnWidth = 320;
+        const btnHeight = 44;
+
+        const box = this.scene.add.rectangle(modalX, btnY, btnWidth, btnHeight, 0xb91c1c, 0.95)
+            .setStrokeStyle(2, 0xf87171)
+            .setInteractive({ useHandCursor: true });
+
+        const label = this.scene.add.text(modalX, btnY, this.deathOptions[0].label, {
+            fontSize: '15px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2.5
+        }).setOrigin(0.5);
+
+        box.on('pointerover', () => {
+            this.selectedDeathIndex = 0;
+            this.soundManager?.playMenuSelect();
+            this.updateDeathVisuals();
+        });
+
+        box.on('pointerdown', () => {
+            this.selectedDeathIndex = 0;
+            this.triggerCurrentDeathOption();
+        });
+
+        this.deathButtonBoxes.push(box);
+        this.deathButtonLabels.push(label);
+        this.deathContainer.add([box, label]);
+
+        // Selection Highlight
+        this.deathHighlight = this.scene.add.graphics();
+        this.deathContainer.add(this.deathHighlight);
+
+        this.updateDeathVisuals();
+    }
+
+    public updateDeathMenu() {
+        if (!this.isDeathScreenOpen) return;
+
+        // Enter or Space to Select
+        if (
+            (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
+            (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
+        ) {
+            this.triggerCurrentDeathOption();
+        }
+    }
+
+    private triggerCurrentDeathOption() {
+        const opt = this.deathOptions[this.selectedDeathIndex];
+        if (opt && opt.action) {
+            this.soundManager?.playMenuSelect();
+            opt.action();
+        }
+    }
+
+    private updateDeathVisuals() {
+        if (!this.isDeathScreenOpen || !this.deathHighlight) return;
+
+        const activeBox = this.deathButtonBoxes[0];
+        if (activeBox) {
+            activeBox.setFillStyle(0xb91c1c, 0.95);
+            activeBox.setStrokeStyle(2, 0xf87171);
+            activeBox.setScale(1.02);
+            if (this.deathButtonLabels[0]) {
+                this.deathButtonLabels[0].setScale(1.02);
+                this.deathButtonLabels[0].setColor('#ffffff');
+            }
+
+            this.deathHighlight.clear();
+            this.deathHighlight.lineStyle(3, 0xfca5a5, 1);
+            this.deathHighlight.strokeRoundedRect(
+                activeBox.x - (activeBox.width * activeBox.scaleX / 2) - 3,
+                activeBox.y - (activeBox.height * activeBox.scaleY / 2) - 3,
+                (activeBox.width * activeBox.scaleX) + 6,
+                (activeBox.height * activeBox.scaleY) + 6,
+                6
+            );
+        }
+    }
+
+    hideDeathScreen() {
+        this.isDeathScreenOpen = false;
+        if (this.deathContainer) {
+            this.deathContainer.destroy();
+            this.deathContainer = undefined;
         }
     }
 }

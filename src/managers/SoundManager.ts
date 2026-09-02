@@ -71,16 +71,21 @@ export class SoundManager {
         this.playTone(620, 180, 'sawtooth', 0.08, 0.2);
     }
 
+    public playEnemyShoot() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        this.playTone(220, 110, 'sawtooth', 0.14, 0.22);
+    }
+
     public playCoin() {
         if (this.isMuted) return;
         this.ensureContext();
-        this.playTone(987.77, 1318.51, 'triangle', 0.15, 0.25); // B5 to E6 gleaming chime
+        this.playTone(987.77, 1318.51, 'triangle', 0.15, 0.25);
     }
 
     public playPowerup() {
         if (this.isMuted) return;
         this.ensureContext();
-        // 4-step ascending 8-bit fanfare (C5 -> E5 -> G5 -> C6)
         this.playTone(523.25, 523.25, 'triangle', 0.06, 0.22);
         this.scene.time.delayedCall(65, () => this.playTone(659.25, 659.25, 'triangle', 0.06, 0.22));
         this.scene.time.delayedCall(130, () => this.playTone(783.99, 783.99, 'triangle', 0.06, 0.25));
