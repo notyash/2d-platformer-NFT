@@ -1,6 +1,7 @@
 // src/entities/Player.ts
 import Phaser from 'phaser';
 import type { Facing } from '../types';
+import { SoundManager } from '../managers/SoundManager';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
     public cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -28,11 +29,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public lastSafeX: number = 100;
     public lastSafeY: number = 100;
 
-    public gunTimer?: Phaser.Time.TimerEvent;
     public bullets: Phaser.Physics.Arcade.Group;
+    public soundManager?: SoundManager;
+    private lastEmptyShotTime: number = 0;
 
-    constructor(scene: Phaser.Scene, x: number, y: number) {
+    constructor(scene: Phaser.Scene, x: number, y: number, soundManager?: SoundManager) {
         super(scene, x, y, 'idle-r');
+        this.soundManager = soundManager;
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
@@ -74,6 +77,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
                 this.setVelocityY(-jumpSpeed); 
                 this.canJump = false; 
                 this.isNormalJump = true; 
+                this.soundManager?.playJump();
             }
         } else {
             this.canJump = true;
@@ -84,22 +88,51 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.isNormalJump = false; 
         }
 
-        if (this.hasGun && Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-            this.shootBullet();
+        if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            if (this.hasGun) {
+                this.shootBullet();
+            } else if (this.scene.time.now > this.lastEmptyShotTime + 500) {
+                this.lastEmptyShotTime = this.scene.time.now;
+                this.scene.events.emit('empty-gun-shot', this.x, this.y);
+            }
         }
 
         this.updateAnimationState(isGrounded);
         
-        // Reset states that need to be re-evaluated each frame
+        // Reset per-frame platform evaluation
         this.isOnPlatform = false; 
-        this.isNearDoor = false; 
     }
 
     private shootBullet() {
-        const bullet = this.bullets.create(this.x, this.y, 'bullet') as Phaser.Physics.Arcade.Sprite;
-        bullet.body!.setSize(10, 10);
-        bullet.setVelocityX(this.facing === 'right' ? 500 : -500);
-        this.scene.time.delayedCall(1500, () => { if (bullet.active) bullet.destroy(); });
+        const isRight = this.facing === 'right';
+        const spawnX = isRight ? this.x + 12 : this.x - 12;
+        const spawnY = this.y - 2;
+
+        const bullet = this.bullets.create(spawnX, spawnY, 'fire-bullets') as Phaser.Physics.Arcade.Sprite;
+        bullet.setDepth(5);
+        bullet.setOrigin(0.5, 0.5);
+        bullet.setFlipX(!isRight);
+
+        const body = bullet.body as Phaser.Physics.Arcade.Body;
+        body.setSize(12, 12);
+        body.setOffset(2, 2);
+        body.allowGravity = false;
+
+        if (this.scene.anims.exists('fire-bullet-anim')) {
+            bullet.play('fire-bullet-anim');
+        }
+
+        const bulletSpeed = 500;
+        const bulletLifespanMs = 600; // ~300px travel range (~9-10 tiles)
+
+        bullet.setVelocityX(isRight ? bulletSpeed : -bulletSpeed);
+        this.soundManager?.playShoot();
+
+        this.scene.time.delayedCall(bulletLifespanMs, () => { 
+            if (bullet.active) {
+                bullet.destroy(); 
+            }
+        });
     }
 
     private updateAnimationState(isGrounded: boolean) {
@@ -126,12 +159,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     die() {
         if (this.isInvincible) return;
 
+        // If player has Totem Shield: absorb death without resetting stage
         if (this.hasTotem) {
             this.hasTotem = false; 
             this.isInvincible = true;
             this.setPosition(this.lastSafeX, this.lastSafeY); 
             this.setVelocity(0, 0); 
             this.setTint(0xffaa00); 
+            this.soundManager?.playDeath();
             this.scene.time.delayedCall(2000, () => {
                 this.isInvincible = false;
                 if (this.hasGun) this.setTint(0x00ffff); 
@@ -140,11 +175,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
+        // Full Death: Respawn at active checkpoint & reset stage
         this.setPosition(this.activeSpawnX, this.activeSpawnY); 
         this.setVelocity(0, 0);
         this.anims.stop(); 
         this.setTexture(this.facing === 'right' ? 'idle-r' : 'idle-l');
         this.hasGun = false; 
         this.clearTint();
+        this.soundManager?.playDeath();
+
+        // Emit death event for collectibles & mobs reset
+        this.scene.events.emit('player-death');
     }
 }

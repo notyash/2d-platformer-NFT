@@ -5,6 +5,8 @@ import { EnvironmentManager } from '../managers/EnvironmentManager';
 import { EnemyManager } from '../managers/EnemyManager';
 import { CollectiblesManager } from '../managers/CollectiblesManager';
 import { UIManager } from '../managers/UIManager';
+import { InventoryManager } from '../managers/InventoryManager';
+import { SoundManager } from '../managers/SoundManager';
 
 export class MainStageScene extends Phaser.Scene {
     private player!: Player;
@@ -12,11 +14,20 @@ export class MainStageScene extends Phaser.Scene {
     private enemyManager!: EnemyManager;
     private collectiblesManager!: CollectiblesManager;
     private uiManager!: UIManager;
+    private inventoryManager!: InventoryManager;
+    private soundManager!: SoundManager;
 
     private groundLayer!: Phaser.Tilemaps.TilemapLayer;
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
 
+    // Hardcore Speedrun & Death State
     private startTime: number = 0;
+    private totalPausedTime: number = 0;
+    private pauseStartTime: number = 0;
+    public isGamePaused: boolean = false;
+    public totalDeaths: number = 0;
+
+    private escKey!: Phaser.Input.Keyboard.Key;
 
     constructor() {
         super('MainStageScene');
@@ -38,11 +49,19 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('pipe-monster', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
         this.load.image('jump-pad-img', 'assets/sprites/jump-pad.png');
         this.load.spritesheet('coin', 'assets/sprites/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
-        this.load.image('bullet', 'assets/sprites/bullet.png');
+        
+        // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
+        this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
 
-        this.load.spritesheet('mob-onion', 'assets/sprites/monsters/onion-sheet.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('mob-slime', 'assets/sprites/monsters/slime-sheet.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('mob-goblin', 'assets/sprites/monsters/goblin-sheet.png', { frameWidth: 32, frameHeight: 32 });
+        // Placeholder Mobs (Bug, Devil, Hedgehog) - 42x30 frames
+        this.load.spritesheet('mob-bug-green-l', 'assets/sprites/monsters/Bug_42x30_Green_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-bug-green-r', 'assets/sprites/monsters/Bug_42x30_Green_Walk_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-bug-yellow-l', 'assets/sprites/monsters/Bug_42x30_Yellow_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-bug-yellow-r', 'assets/sprites/monsters/Bug_42x30_Yellow_Walk_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-devil-l', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-devil-r', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-hedgehog-l', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_L.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-hedgehog-r', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_R.png', { frameWidth: 42, frameHeight: 30 });
 
         const totemSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23B8860B" stroke-width="2"><polygon fill="%23FFD700" points="12,2 22,12 12,22 2,12"/><polygon fill="%23FFEA00" points="36,4 42,12 36,20 30,12"/><polygon fill="%23FFFF00" points="60,6 62,12 60,18 58,12"/><polygon fill="%23FFEA00" points="84,4 90,12 84,20 78,12"/></g></svg>`;
         const gunSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23008B8B" stroke-width="2"><rect fill="%2300FFFF" x="4" y="6" width="16" height="12" rx="4"/><rect fill="%23E0FFFF" x="28" y="8" width="16" height="8" rx="2"/><rect fill="%23FFFFFF" x="52" y="10" width="16" height="4" rx="1"/><rect fill="%23E0FFFF" x="76" y="8" width="16" height="8" rx="2"/></g></svg>`;
@@ -82,29 +101,64 @@ export class MainStageScene extends Phaser.Scene {
         }
 
         // Initialize Managers
-        this.uiManager = new UIManager(this);
+        this.soundManager = new SoundManager(this);
+        this.uiManager = new UIManager(this, this.soundManager);
         this.uiManager.createHUD();
 
-        this.player = new Player(this, spawnX, spawnY);
+        this.player = new Player(this, spawnX, spawnY, this.soundManager);
         this.player.spawnX = spawnX; this.player.spawnY = spawnY;
         this.player.activeSpawnX = spawnX; this.player.activeSpawnY = spawnY;
         this.player.lastSafeX = spawnX; this.player.lastSafeY = spawnY;
 
-        this.envManager = new EnvironmentManager(this, this.player);
-        this.enemyManager = new EnemyManager(this, this.player, this.uiManager);
-        this.collectiblesManager = new CollectiblesManager(this, this.player, this.uiManager);
+        this.inventoryManager = new InventoryManager(this, this.player, this.uiManager, this.soundManager);
+        this.envManager = new EnvironmentManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
+        this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.soundManager);
+        this.collectiblesManager = new CollectiblesManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
 
         // Setup Entities
         this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer);
         this.enemyManager.setupPipeMonsters(map);
         
         this.envManager.setupDoors(rawMapObjects);
+        this.envManager.setupGunDisarmZones(rawMapObjects);
         this.envManager.setupMovingPlatforms(map, rawMapObjects);
         this.envManager.setupJumpPads(rawMapObjects);
         this.envManager.setupFirebars(rawMapObjects);
         this.envManager.setupSmashTriggers(map);
         
         this.collectiblesManager.setupCollectibles(map);
+
+        // Listen for player death event (increments session deaths & resets stage)
+        this.events.on('player-death', () => {
+            this.totalDeaths++;
+            this.collectiblesManager.resetAll(false); // preserves collected temp checkpoint while active
+            this.enemyManager.resetAll();
+            this.inventoryManager.onPlayerDeath();
+            this.player.bullets.clear(true, true);
+        });
+
+        // Listen for empty gun trigger
+        this.events.on('empty-gun-shot', (x: number, y: number) => {
+            this.uiManager.showFloatingText(x, y - 20, 'NO GUN AVAILABLE', '#EF4444');
+        });
+
+        // ESC Key listener for Pause Menu
+        if (this.input.keyboard) {
+            this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+            this.escKey.on('down', () => {
+                if (this.isGamePaused) {
+                    this.resumeGame();
+                } else {
+                    this.pauseGame();
+                }
+            });
+        }
+
+        // Accidental Reload Guard (beforeunload event)
+        window.addEventListener('beforeunload', this.beforeUnloadHandler);
+        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+        });
 
         // World Colliders
         this.physics.add.collider(this.player, this.groundLayer);
@@ -115,6 +169,13 @@ export class MainStageScene extends Phaser.Scene {
             return body.velocity.y > 0 && body.bottom <= t.pixelY + 10;
         });
 
+        // Bullets vs Ground / Walls
+        this.physics.add.collider(this.player.bullets, this.groundLayer, (bulletObj) => {
+            const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+            this.uiManager.spawnParticles(bullet.x, bullet.y, 0xFF8C00);
+            bullet.destroy();
+        });
+
         const smashLayer = map.getLayer('SmashGround')?.tilemapLayer;
         if (smashLayer) {
             this.physics.add.collider(this.player, smashLayer, undefined, (_p, tile) => {
@@ -122,6 +183,12 @@ export class MainStageScene extends Phaser.Scene {
                 if (t.index === -1) return false;
                 const body = this.player.body as Phaser.Physics.Arcade.Body;
                 return body.velocity.y > 0 && body.bottom <= t.pixelY + 10 && !this.player.canSmash;
+            });
+
+            this.physics.add.collider(this.player.bullets, smashLayer, (bulletObj) => {
+                const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+                this.uiManager.spawnParticles(bullet.x, bullet.y, 0xFF8C00);
+                bullet.destroy();
             });
         }
 
@@ -140,6 +207,77 @@ export class MainStageScene extends Phaser.Scene {
         this.input.on('pointerdown', () => this.game.canvas.focus());
 
         this.startTime = this.time.now;
+        this.totalPausedTime = 0;
+    }
+
+    private beforeUnloadHandler = (e: BeforeUnloadEvent) => {
+        // Only prompt if a run is active
+        e.preventDefault();
+        e.returnValue = '';
+    };
+
+    private pauseGame() {
+        this.isGamePaused = true;
+        this.pauseStartTime = this.time.now;
+        this.physics.pause();
+        this.player.anims.pause();
+        this.soundManager.playMenuSelect();
+
+        const formattedTime = this.getFormattedElapsedTime();
+
+        this.uiManager.showPauseMenu(
+            () => this.resumeGame(),
+            () => this.restartFullRun(),
+            {
+                time: formattedTime,
+                deaths: this.totalDeaths,
+                coins: this.collectiblesManager.coinsCollected,
+                kills: this.enemyManager.enemiesKilled
+            }
+        );
+    }
+
+    private resumeGame() {
+        if (!this.isGamePaused) return;
+        this.isGamePaused = false;
+        this.totalPausedTime += (this.time.now - this.pauseStartTime);
+        this.physics.resume();
+        this.player.anims.resume();
+        this.uiManager.hidePauseMenu();
+        this.soundManager.playMenuSelect();
+    }
+
+    private restartFullRun() {
+        this.resumeGame();
+        this.totalDeaths = 0;
+        this.startTime = this.time.now;
+        this.totalPausedTime = 0;
+
+        this.player.activeSpawnX = this.player.spawnX;
+        this.player.activeSpawnY = this.player.spawnY;
+        this.player.lastSafeX = this.player.spawnX;
+        this.player.lastSafeY = this.player.spawnY;
+        this.player.setPosition(this.player.spawnX, this.player.spawnY);
+        this.player.setVelocity(0, 0);
+        this.player.hasGun = false;
+        this.player.hasTotem = false;
+        this.player.clearTint();
+        this.player.bullets.clear(true, true);
+
+        this.collectiblesManager.resetAll(true); // force-respawns all collectibles on manual restart
+        this.enemyManager.resetAll();
+        this.inventoryManager.resetAll();
+
+        this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8');
+        this.soundManager.playPowerup();
+    }
+
+    private getFormattedElapsedTime(): string {
+        const elapsedMs = Math.max(0, this.time.now - this.startTime - this.totalPausedTime);
+        const minutes = Math.floor(elapsedMs / 60000);
+        const seconds = Math.floor((elapsedMs % 60000) / 1000);
+        const millis = Math.floor(elapsedMs % 1000);
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
     }
 
     private createLayers(map: Phaser.Tilemaps.Tilemap) {
@@ -189,23 +327,41 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'gun-anim', frames: this.anims.generateFrameNumbers('gun-powerup', { start: 0, end: 3 }), frameRate: 12, yoyo: true, repeat: -1 });
         this.anims.create({ key: 'cp-anim', frames: this.anims.generateFrameNumbers('temp-checkpoint', { start: 0, end: 3 }), frameRate: 8, yoyo: true, repeat: -1 });
         
-        this.anims.create({ key: 'onion-walk', frames: this.anims.generateFrameNumbers('mob-onion', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
-        this.anims.create({ key: 'slime-walk', frames: this.anims.generateFrameNumbers('mob-slime', { start: 0, end: 3 }), frameRate: 4, repeat: -1 });
-        this.anims.create({ key: 'goblin-walk', frames: this.anims.generateFrameNumbers('mob-goblin', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
+        // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
+        this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });
+
+        // Bug (Green & Yellow) - 42x30 (4 frames)
+        this.anims.create({ key: 'mob-bug-green-walk-l', frames: this.anims.generateFrameNumbers('mob-bug-green-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-bug-green-walk-r', frames: this.anims.generateFrameNumbers('mob-bug-green-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-bug-yellow-walk-l', frames: this.anims.generateFrameNumbers('mob-bug-yellow-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-bug-yellow-walk-r', frames: this.anims.generateFrameNumbers('mob-bug-yellow-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+
+        // Devil - 42x30 (4 frames)
+        this.anims.create({ key: 'mob-devil-walk-l', frames: this.anims.generateFrameNumbers('mob-devil-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-devil-walk-r', frames: this.anims.generateFrameNumbers('mob-devil-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+
+        // Hedgehog - 42x30 (4 frames)
+        this.anims.create({ key: 'mob-hedgehog-walk-l', frames: this.anims.generateFrameNumbers('mob-hedgehog-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-hedgehog-walk-r', frames: this.anims.generateFrameNumbers('mob-hedgehog-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
     }
 
     update() {
-        const elapsedSeconds = Math.floor((this.time.now - this.startTime) / 1000);
-        
+        if (this.isGamePaused) {
+            this.uiManager.updatePauseMenu();
+            return;
+        }
+
+        const formattedTime = this.getFormattedElapsedTime();
+
         this.uiManager.updateHUD(
-            elapsedSeconds, 
+            formattedTime, 
             this.collectiblesManager.coinsCollected, 
-            this.enemyManager.enemiesKilled, 
-            this.player.gunTimer, 
-            this.collectiblesManager.checkpointTimer
+            this.enemyManager.enemiesKilled,
+            this.totalDeaths
         );
 
         this.player.update();
+        this.inventoryManager.update();
         this.enemyManager.update(this.groundLayer, this.oneWayLayer);
         this.envManager.update();
     }

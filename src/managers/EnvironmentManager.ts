@@ -1,33 +1,73 @@
 // src/managers/EnvironmentManager.ts
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
+import { UIManager } from './UIManager';
+import { InventoryManager } from './InventoryManager';
+import { SoundManager } from './SoundManager';
 import type { Firebar } from '../types';
 
 export class EnvironmentManager {
     private scene: Phaser.Scene;
     private player: Player;
+    private uiManager: UIManager;
+    private inventoryManager: InventoryManager;
+    private soundManager?: SoundManager;
 
     public movingPlatforms: Phaser.GameObjects.Sprite[] = [];
-    public jumpPads: Phaser.GameObjects.Sprite[] = [];
+    public jumpPads: Phaser.Physics.Arcade.Sprite[] = [];
     public firebars: Firebar[] = [];
     public smashTriggers: Phaser.GameObjects.Zone[] = [];
+    public doorZones: Phaser.GameObjects.Zone[] = [];
+    public disarmZones: Phaser.GameObjects.Zone[] = [];
 
     public doorExitX: number = 0;
     public doorExitY: number = 0;
 
-    constructor(scene: Phaser.Scene, player: Player) {
+    constructor(
+        scene: Phaser.Scene, 
+        player: Player, 
+        uiManager: UIManager, 
+        inventoryManager: InventoryManager,
+        soundManager?: SoundManager
+    ) {
         this.scene = scene;
         this.player = player;
+        this.uiManager = uiManager;
+        this.inventoryManager = inventoryManager;
+        this.soundManager = soundManager;
     }
 
     setupDoors(rawMapObjects: any[]) {
         const exitObject = rawMapObjects.find((obj: any) => obj.name === 'DoorExit');
-        if (exitObject) { this.doorExitX = exitObject.x; this.doorExitY = exitObject.y; }
+        if (exitObject) {
+            this.doorExitX = exitObject.x + (exitObject.width ? exitObject.width / 2 : 0);
+            this.doorExitY = exitObject.y + (exitObject.height ? exitObject.height : 0);
+        }
         
         rawMapObjects.filter((obj: any) => obj.name === 'DoorZone').forEach((obj: any) => {
-            const zone = this.scene.add.zone(obj.x! + obj.width! / 2, obj.y! + obj.height! / 2, obj.width!, obj.height!);
+            const zX = obj.x + (obj.width ? obj.width / 2 : 0);
+            const zY = obj.y + (obj.height ? obj.height / 2 : 0);
+            const zW = obj.width || 32;
+            const zH = obj.height || 48;
+            const zone = this.scene.add.zone(zX, zY, zW, zH);
             this.scene.physics.add.existing(zone, true); 
-            this.scene.physics.add.overlap(this.player, zone, () => this.player.isNearDoor = true);
+            this.doorZones.push(zone);
+        });
+    }
+
+    setupGunDisarmZones(rawMapObjects: any[]) {
+        rawMapObjects.filter((obj: any) => 
+            obj.name === 'GunDisarmZone' || 
+            obj.name === 'DisarmZone' || 
+            obj.name === 'RemoveGunZone'
+        ).forEach((obj: any) => {
+            const zX = obj.x + (obj.width ? obj.width / 2 : 0);
+            const zY = obj.y + (obj.height ? obj.height / 2 : 0);
+            const zW = obj.width || 32;
+            const zH = obj.height || 48;
+            const zone = this.scene.add.zone(zX, zY, zW, zH);
+            this.scene.physics.add.existing(zone, true);
+            this.disarmZones.push(zone);
         });
     }
 
@@ -94,6 +134,7 @@ export class EnvironmentManager {
                 this.player.isNormalJump = false; 
                 this.player.ignoreGroundJumpUntil = currentTime + 150;
                 lastBounceTime = currentTime;
+                this.soundManager?.playJump();
             }
         });
     }
@@ -158,10 +199,49 @@ export class EnvironmentManager {
             else if (plat.x < startX - 150) platBody.setVelocityX(platSpeed);
         });
 
-        // Handle Door Logic
-        if (this.player.isNearDoor && (this.player.body as Phaser.Physics.Arcade.Body).blocked.down && Phaser.Input.Keyboard.JustDown(this.player.enterKey)) {
+        // Handle Teleport Door Logic (Direct bounds intersection + Enter or Up key)
+        let isPlayerInDoor = false;
+        const pBounds = this.player.getBounds();
+        for (const zone of this.doorZones) {
+            if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, zone.getBounds())) {
+                isPlayerInDoor = true;
+                break;
+            }
+        }
+        this.player.isNearDoor = isPlayerInDoor;
+
+        const enterPressed = Phaser.Input.Keyboard.JustDown(this.player.enterKey) || 
+                             Phaser.Input.Keyboard.JustDown(this.player.cursors.up);
+
+        if (isPlayerInDoor && enterPressed && this.doorExitX !== 0) {
             this.player.setPosition(this.doorExitX, this.doorExitY); 
             this.player.setVelocity(0, 0);
+            
+            // Update both base spawn and active spawn
+            this.player.spawnX = this.doorExitX;
+            this.player.spawnY = this.doorExitY;
+            this.player.activeSpawnX = this.doorExitX;
+            this.player.activeSpawnY = this.doorExitY;
+            this.player.lastSafeX = this.doorExitX;
+            this.player.lastSafeY = this.doorExitY;
+            
+            this.scene.cameras.main.flash(200, 255, 255, 255);
+            this.uiManager.showFloatingText(this.doorExitX, this.doorExitY - 20, 'TELEPORTED!', '#00FFFF');
+            this.uiManager.spawnParticles(this.doorExitX, this.doorExitY, 0x00FFFF);
+            this.soundManager?.playTeleport();
+        }
+
+        // Handle Gun Disarm Zones
+        if (this.player.hasGun || this.inventoryManager.gunCount > 0) {
+            for (const zone of this.disarmZones) {
+                if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, zone.getBounds())) {
+                    this.inventoryManager.disarmGun();
+                    this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'GUN DISARMED', '#00FFFF');
+                    this.uiManager.spawnParticles(this.player.x, this.player.y, 0x00FFFF);
+                    this.scene.cameras.main.shake(150, 0.005);
+                    break;
+                }
+            }
         }
 
         // Handle Smash Triggers
