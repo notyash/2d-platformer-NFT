@@ -34,17 +34,17 @@ export class UIManager {
     private deathButtonLabels: Phaser.GameObjects.Text[] = [];
     private deathHighlight?: Phaser.GameObjects.Graphics;
 
-    // Menu Geometry Constants (Screen Coordinates)
+    // Dynamic Menu Geometry Constants
     private readonly pauseModalX = 640;
     private readonly pauseModalY = 240;
-    private readonly pauseStartBtnY = 182; // 240 - 58
+    private currentStartBtnY = 182;
     private readonly pauseBtnGap = 42;
     private readonly pauseBtnWidth = 280;
     private readonly pauseBtnHeight = 34;
 
     private readonly deathModalX = 640;
     private readonly deathModalY = 240;
-    private readonly deathBtnY = 292; // 240 + 52
+    private readonly deathBtnY = 292;
     private readonly deathBtnWidth = 320;
     private readonly deathBtnHeight = 44;
 
@@ -74,7 +74,7 @@ export class UIManager {
             const halfH = this.pauseBtnHeight / 2;
 
             for (let i = 0; i < this.menuOptions.length; i++) {
-                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                const btnY = this.currentStartBtnY + (i * this.pauseBtnGap);
                 if (
                     px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
                     py >= btnY - halfH && py <= btnY + halfH
@@ -117,7 +117,7 @@ export class UIManager {
             const halfH = this.pauseBtnHeight / 2;
 
             for (let i = 0; i < this.menuOptions.length; i++) {
-                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                const btnY = this.currentStartBtnY + (i * this.pauseBtnGap);
                 if (
                     px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
                     py >= btnY - halfH && py <= btnY + halfH
@@ -179,7 +179,7 @@ export class UIManager {
         }
     };
 
-    createHUD() {
+    createHUD(onPauseToggle?: () => void) {
         this.hudText = this.scene.add.text(16, 16, '', { 
             fontSize: '15px', 
             fontFamily: 'Arial', 
@@ -188,6 +188,35 @@ export class UIManager {
             strokeThickness: 3.5,
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(15);
+
+        // Top Right [ESC] Menu Button
+        const menuBtnContainer = this.scene.add.container(1280 - 75, 24).setScrollFactor(0).setDepth(15);
+        const btnBg = this.scene.add.rectangle(0, 0, 114, 28, 0x0f172a, 0.85)
+            .setStrokeStyle(1.5, 0x38bdf8, 0.8)
+            .setInteractive({ useHandCursor: true });
+        
+        const btnText = this.scene.add.text(0, 0, '[ESC] Menu', {
+            fontSize: '12px', fontFamily: 'Arial', color: '#38bdf8', fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        btnBg.on('pointerover', () => {
+            btnBg.setFillStyle(0x0284c7, 0.95);
+            btnBg.setStrokeStyle(1.5, 0x7dd3fc);
+            btnText.setColor('#ffffff');
+        });
+
+        btnBg.on('pointerout', () => {
+            btnBg.setFillStyle(0x0f172a, 0.85);
+            btnBg.setStrokeStyle(1.5, 0x38bdf8, 0.8);
+            btnText.setColor('#38bdf8');
+        });
+
+        btnBg.on('pointerdown', () => {
+            this.soundManager?.playMenuSelect();
+            if (onPauseToggle) onPauseToggle();
+        });
+
+        menuBtnContainer.add([btnBg, btnText]);
     }
 
     updateHUD(formattedTime: string, coins: number, kills: number, deaths: number) {
@@ -246,7 +275,7 @@ export class UIManager {
         onResume: () => void, 
         onRespawnCheckpoint: () => void,
         onRestart: () => void, 
-        stats: { time: string; deaths: number; coins: number; kills: number }
+        stats: { time: string; deaths: number; coins: number; kills: number; hasCheckpoint?: boolean }
     ) {
         this.hidePauseMenu();
         this.isPauseMenuOpen = true;
@@ -262,30 +291,18 @@ export class UIManager {
         const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x000000, 0.75);
         this.pauseContainer.add(backdrop);
 
-        // Modal Frame
-        const modalWidth = 380;
-        const modalHeight = 360;
-        const modalBg = this.scene.add.rectangle(this.pauseModalX, this.pauseModalY, modalWidth, modalHeight, 0x0f172a, 0.95)
-            .setStrokeStyle(2.5, 0x38bdf8, 0.9);
-        this.pauseContainer.add(modalBg);
-
-        // Title
-        const title = this.scene.add.text(this.pauseModalX, this.pauseModalY - 145, 'GAME PAUSED', {
-            fontSize: '22px', fontFamily: 'Arial', color: '#38bdf8', stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
-        }).setOrigin(0.5);
-        this.pauseContainer.add(title);
-
-        // Run Stats Summary
-        const statsSummary = this.scene.add.text(this.pauseModalX, this.pauseModalY - 108, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
-            fontSize: '12px', fontFamily: 'Arial', color: '#94a3b8', align: 'center', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
-        }).setOrigin(0.5);
-        this.pauseContainer.add(statsSummary);
-
-        // Define Menu Options
+        // Construct dynamic menu options
         this.menuOptions = [
-            { id: 'resume', label: 'Resume Game', action: onResume },
-            { id: 'respawn', label: 'Respawn at Checkpoint', action: onRespawnCheckpoint },
-            { id: 'restart', label: 'Restart Full Run (0%)', action: onRestart },
+            { id: 'resume', label: 'Resume Game', action: onResume }
+        ];
+
+        // "Respawn at Checkpoint" only shows up if a checkpoint has been achieved
+        if (stats.hasCheckpoint) {
+            this.menuOptions.push({ id: 'respawn', label: 'Respawn at Checkpoint', action: onRespawnCheckpoint });
+        }
+
+        this.menuOptions.push(
+            { id: 'restart', label: 'Restart Full Run', action: onRestart },
             { 
                 id: 'sound', 
                 label: `Sound FX: ${this.soundEnabled ? 'ON' : 'OFF'}`, 
@@ -308,14 +325,39 @@ export class UIManager {
                     this.soundManager?.playMenuSelect();
                 } 
             }
-        ];
+        );
+
+        // Dynamic modal sizing & positioning
+        const totalBtns = this.menuOptions.length;
+        const modalWidth = 380;
+        const modalHeight = totalBtns === 5 ? 360 : 320;
+        const titleOffsetY = totalBtns === 5 ? -145 : -125;
+        const statsOffsetY = totalBtns === 5 ? -108 : -88;
+        
+        this.currentStartBtnY = totalBtns === 5 ? 182 : 196;
+
+        const modalBg = this.scene.add.rectangle(this.pauseModalX, this.pauseModalY, modalWidth, modalHeight, 0x0f172a, 0.95)
+            .setStrokeStyle(2.5, 0x38bdf8, 0.9);
+        this.pauseContainer.add(modalBg);
+
+        // Title
+        const title = this.scene.add.text(this.pauseModalX, this.pauseModalY + titleOffsetY, 'GAME PAUSED', {
+            fontSize: '22px', fontFamily: 'Arial', color: '#38bdf8', stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.pauseContainer.add(title);
+
+        // Run Stats Summary
+        const statsSummary = this.scene.add.text(this.pauseModalX, this.pauseModalY + statsOffsetY, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
+            fontSize: '12px', fontFamily: 'Arial', color: '#94a3b8', align: 'center', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.pauseContainer.add(statsSummary);
 
         this.menuButtonBoxes = [];
         this.menuButtonLabels = [];
 
         for (let i = 0; i < this.menuOptions.length; i++) {
             const opt = this.menuOptions[i];
-            const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+            const btnY = this.currentStartBtnY + (i * this.pauseBtnGap);
 
             // Button Box
             const box = this.scene.add.rectangle(this.pauseModalX, btnY, this.pauseBtnWidth, this.pauseBtnHeight, 0x1e293b, 0.9)
@@ -348,7 +390,7 @@ export class UIManager {
             const halfH = this.pauseBtnHeight / 2;
 
             for (let i = 0; i < this.menuOptions.length; i++) {
-                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                const btnY = this.currentStartBtnY + (i * this.pauseBtnGap);
                 if (
                     px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
                     py >= btnY - halfH && py <= btnY + halfH
@@ -381,13 +423,14 @@ export class UIManager {
             const box = this.menuButtonBoxes[i];
             const label = this.menuButtonLabels[i];
             const isSelected = (i === this.selectedMenuIndex);
+            const opt = this.menuOptions[i];
 
             if (isSelected) {
-                if (i === 2) {
+                if (opt.id === 'restart') {
                     // Restart Full Run (Red)
                     box.setFillStyle(0xb91c1c, 0.95);
                     box.setStrokeStyle(2, 0xf87171);
-                } else if (i === 1) {
+                } else if (opt.id === 'respawn') {
                     // Respawn at Checkpoint (Amber / Gold)
                     box.setFillStyle(0xb45309, 0.95);
                     box.setStrokeStyle(2, 0xfbbf24);
@@ -410,10 +453,11 @@ export class UIManager {
 
         this.selectionHighlight.clear();
         const activeBox = this.menuButtonBoxes[this.selectedMenuIndex];
-        if (activeBox) {
+        const activeOpt = this.menuOptions[this.selectedMenuIndex];
+        if (activeBox && activeOpt) {
             let borderColor = 0x7dd3fc;
-            if (this.selectedMenuIndex === 2) borderColor = 0xfca5a5;
-            else if (this.selectedMenuIndex === 1) borderColor = 0xfde047;
+            if (activeOpt.id === 'restart') borderColor = 0xfca5a5;
+            else if (activeOpt.id === 'respawn') borderColor = 0xfde047;
 
             this.selectionHighlight.lineStyle(3, borderColor, 1);
             this.selectionHighlight.strokeRoundedRect(
@@ -423,6 +467,14 @@ export class UIManager {
                 (activeBox.height * activeBox.scaleY) + 6,
                 6
             );
+        }
+    }
+
+    hideDeathScreen() {
+        this.isDeathScreenOpen = false;
+        if (this.deathContainer) {
+            this.deathContainer.destroy();
+            this.deathContainer = undefined;
         }
     }
 
@@ -449,18 +501,15 @@ export class UIManager {
 
         this.deathContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(150);
 
-        // Dark Crimson Vignette Backdrop
         const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x0a0000, 0.85);
         this.deathContainer.add(backdrop);
 
-        // Modal Frame
         const modalWidth = 420;
         const modalHeight = 300;
         const modalBg = this.scene.add.rectangle(this.deathModalX, this.deathModalY, modalWidth, modalHeight, 0x180808, 0.96)
             .setStrokeStyle(2.5, 0xef4444, 0.95);
         this.deathContainer.add(modalBg);
 
-        // Title
         const title = this.scene.add.text(this.deathModalX, this.deathModalY - 105, 'YOU DIED', {
             fontSize: '32px', fontFamily: 'Arial', color: '#ef4444', stroke: '#450a0a', strokeThickness: 5, fontStyle: 'bold'
         }).setOrigin(0.5);
@@ -545,14 +594,6 @@ export class UIManager {
                 (activeBox.height * activeBox.scaleY) + 6,
                 6
             );
-        }
-    }
-
-    hideDeathScreen() {
-        this.isDeathScreenOpen = false;
-        if (this.deathContainer) {
-            this.deathContainer.destroy();
-            this.deathContainer = undefined;
         }
     }
 }

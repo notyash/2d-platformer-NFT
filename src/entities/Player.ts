@@ -7,6 +7,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public cursors: Phaser.Types.Input.Keyboard.CursorKeys;
     public spaceKey: Phaser.Input.Keyboard.Key;
     public enterKey: Phaser.Input.Keyboard.Key;
+    public ctrlKey: Phaser.Input.Keyboard.Key;
 
     // WASD Controls
     public keyW!: Phaser.Input.Keyboard.Key;
@@ -38,13 +39,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public bullets: Phaser.Physics.Arcade.Group;
     public soundManager?: SoundManager;
 
+    private lastMouseDown: boolean = false;
+    private lastCtrlDown: boolean = false;
+
     // Key Lift on Respawn State (prevents held keys from triggering actions immediately on respawn)
     private requireKeyLift = {
         left: false,
         right: false,
-        up: false,
-        space: false,
-        mouse: false
+        jump: false,
+        mouse: false,
+        ctrl: false
     };
 
     constructor(scene: Phaser.Scene, x: number, y: number, soundManager?: SoundManager) {
@@ -62,6 +66,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.cursors = scene.input.keyboard!.createCursorKeys();
         this.spaceKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.enterKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+        this.ctrlKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
 
         // Setup WASD
         this.keyW = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
@@ -75,16 +80,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public enforceKeyLift() {
         const rawLeft = this.cursors.left.isDown || (this.keyA && this.keyA.isDown);
         const rawRight = this.cursors.right.isDown || (this.keyD && this.keyD.isDown);
-        const rawUp = this.cursors.up.isDown || (this.keyW && this.keyW.isDown);
-        const rawSpace = this.spaceKey.isDown;
+        const rawJump = this.cursors.up.isDown || (this.keyW && this.keyW.isDown) || this.spaceKey.isDown;
         const pointer = this.scene.input.activePointer;
-        const rawMouse = Boolean(pointer && pointer.isDown);
+        const rawMouse = Boolean(pointer && pointer.leftButtonDown());
+        const rawCtrl = Boolean(this.ctrlKey && this.ctrlKey.isDown);
 
         this.requireKeyLift.left = rawLeft;
         this.requireKeyLift.right = rawRight;
-        this.requireKeyLift.up = rawUp;
-        this.requireKeyLift.space = rawSpace;
+        this.requireKeyLift.jump = rawJump;
         this.requireKeyLift.mouse = rawMouse;
+        this.requireKeyLift.ctrl = rawCtrl;
+        this.lastMouseDown = rawMouse;
+        this.lastCtrlDown = rawCtrl;
     }
 
     update() {
@@ -96,23 +103,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
         const pointer = this.scene.input.activePointer;
 
-        // 1. Evaluate Key Lift Releases (once lifted, the key is unlocked)
+        // 1. Evaluate Key Lift Releases (once lifted, the key/click is unlocked)
         const rawLeftDown = this.cursors.left.isDown || this.keyA.isDown;
         const rawRightDown = this.cursors.right.isDown || this.keyD.isDown;
-        const rawUpDown = this.cursors.up.isDown || this.keyW.isDown;
-        const rawMouseDown = Boolean(pointer && pointer.isDown && pointer.leftButtonDown());
+        const rawJumpDown = this.cursors.up.isDown || this.keyW.isDown || this.spaceKey.isDown;
+        const rawMouseDown = Boolean(pointer && pointer.leftButtonDown());
+        const rawCtrlDown = Boolean(this.ctrlKey && this.ctrlKey.isDown);
 
         if (!rawLeftDown) this.requireKeyLift.left = false;
         if (!rawRightDown) this.requireKeyLift.right = false;
-        if (!rawUpDown) this.requireKeyLift.up = false;
+        if (!rawJumpDown) this.requireKeyLift.jump = false;
         if (!rawMouseDown) this.requireKeyLift.mouse = false;
-        if (!this.spaceKey.isDown) this.requireKeyLift.space = false;
+        if (!rawCtrlDown) this.requireKeyLift.ctrl = false;
 
         // 2. Filter inputs through Key Lift guard
         const isLeftDown = rawLeftDown && !this.requireKeyLift.left;
         const isRightDown = rawRightDown && !this.requireKeyLift.right;
-        const isMouseJumpDown = rawMouseDown && !this.requireKeyLift.mouse;
-        const isUpDown = (rawUpDown && !this.requireKeyLift.up) || isMouseJumpDown;
+        const isJumpDown = rawJumpDown && !this.requireKeyLift.jump;
 
         if (isLeftDown) { 
             this.setVelocityX(-speed); 
@@ -128,7 +135,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         if (isGrounded) {
-            if (isUpDown && this.canJump && this.scene.time.now > this.ignoreGroundJumpUntil) {
+            if (isJumpDown && this.canJump && this.scene.time.now > this.ignoreGroundJumpUntil) {
                 this.setVelocityY(-jumpSpeed); 
                 this.canJump = false; 
                 this.isNormalJump = true; 
@@ -138,17 +145,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.canJump = true;
         }
 
-        // Variable Jump Height: releasing Up, W, or Left Click early cuts velocity into a short-hop
-        if (this.isNormalJump && !isUpDown && body.velocity.y < shortHopCap) {
+        // Variable Jump Height: releasing Space, Up, or W early cuts velocity into a short-hop
+        if (this.isNormalJump && !isJumpDown && body.velocity.y < shortHopCap) {
             this.setVelocityY(shortHopCap); 
             this.isNormalJump = false; 
         }
 
-        // Space key shoots only if gun is equipped (silent when no gun)
-        if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.requireKeyLift.space) {
-            if (this.hasGun) {
-                this.shootBullet();
-            }
+        // 3. Left Mouse Click or Left Ctrl shoots Blaster
+        const isMouseJustPressed = rawMouseDown && !this.lastMouseDown && !this.requireKeyLift.mouse;
+        const isCtrlJustPressed = rawCtrlDown && !this.lastCtrlDown && !this.requireKeyLift.ctrl;
+        this.lastMouseDown = rawMouseDown;
+        this.lastCtrlDown = rawCtrlDown;
+
+        if ((isMouseJustPressed || isCtrlJustPressed) && this.hasGun) {
+            this.shootBullet();
         }
 
         this.updateAnimationState(isGrounded);

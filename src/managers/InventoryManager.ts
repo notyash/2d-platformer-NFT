@@ -68,7 +68,7 @@ export class InventoryManager {
     private createEquipmentUI() {
         this.hudContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(20);
 
-        const badgeWidth = 148;
+        const badgeWidth = 158;
         const badgeHeight = 34;
 
         // Gun Badge Container
@@ -78,8 +78,8 @@ export class InventoryManager {
             .setOrigin(0.5);
         const gunIcon = this.scene.add.sprite(-badgeWidth / 2 + 18, 0, 'gun-powerup', 0)
             .setDisplaySize(20, 20);
-        this.gunText = this.scene.add.text(-badgeWidth / 2 + 34, 0, '[Space] Shoot', {
-            fontSize: '12px', fontFamily: 'Arial', color: '#00FFFF', fontStyle: 'bold'
+        this.gunText = this.scene.add.text(-badgeWidth / 2 + 34, 0, '[L-Click / Ctrl] Shoot', {
+            fontSize: '11px', fontFamily: 'Arial', color: '#00FFFF', fontStyle: 'bold'
         }).setOrigin(0, 0.5);
 
         this.gunBadgeContainer.add([gunBg, gunIcon, this.gunText]);
@@ -184,7 +184,7 @@ export class InventoryManager {
             this.totemBadgeContainer.setVisible(false);
         }
 
-        this.gunText.setText('[Space] Shoot');
+        this.gunText.setText('[L-Click / Ctrl] Shoot');
 
         if (this.player.hasTotem) {
             this.totemText.setText(this.totemCount > 0 ? `[E] Totem ON (+${this.totemCount})` : '[E] Totem: ACTIVE');

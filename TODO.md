@@ -1,11 +1,11 @@
 # Onion Boy - Project Roadmap & TODO List
 
-## ?? Project Scope & Design Decisions
-- **Target Platform**: Desktop-first keyboard controls (no mobile/touchscreen support required).
+## 🎮 Project Scope & Design Decisions
+- **Target Platform**: Desktop-first keyboard & mouse controls (`WASD` / `Arrows`, `Space` / `W` to Jump, `Left-Click` / `Left Ctrl` to Shoot, `[E]` to Activate Totem, `[ESC]` or Top-Right button for Pause Menu).
 - **Boss Encounter**: Optional single mini-boss encounter at the end of the stage.
 - **Economy**: Defeating enemies (mobs, pipe monsters, shooters) awards +1 Coin.
 - **Backend & Web3 Integration**: Runs communicate with Rust/PostgreSQL backend for secure leaderboard logging, whitelist qualification, and anti-cheat verification.
-- **Always-Equipped Abilities**: No hotbar switching. `[Space]` shoots Blaster and `[E]` activates Shield Totem directly.
+- **Always-Equipped Abilities**: No hotbar switching. `Left Click` or `Left Ctrl` shoots Blaster and `[E]` activates Shield Totem directly.
 - **Checkpoint Architecture**: Generalized Custom Checkpoints (`Checkpoint1Zone` -> `Checkpoint1`, `Checkpoint2Zone` -> `Checkpoint2`). Dying or selecting "Respawn at Checkpoint" rolls back state to checkpoint snapshot (respawns items/mobs ahead of checkpoint, keeps prior progress saved).
 
 ---
@@ -13,13 +13,16 @@
 ## ?? Task List
 
 ### ? Completed
-- [x] **Pause Menu Checkpoint Respawn Option**: Added dedicated "Respawn at Checkpoint" button in the `ESC` pause menu.
+- [x] **Top-Right `[ESC] Menu` HUD Button**: Added a clickable `[ESC] Menu` button at the top-right of the screen for quick mouse and keyboard menu toggling.
+- [x] **Controls Rebinding (`Space` Jump & `Left-Click` Shoot)**: `Space`, `W`, and `Up Arrow` now trigger Jump (with variable jump height), while `Left Click` fires the Blaster Gun.
+- [x] **Disable Physics Debugging**: Turned off `debug: false` in `src/main.ts`.
+- [x] **Dynamic Checkpoint Pause Menu Option**: "Respawn at Checkpoint" now conditionally appears only when a checkpoint is achieved; renamed full run reset button to "Restart Full Run".
+- [x] **Pause Menu Checkpoint Respawn Option**: Added dedicated "Respawn at Checkpoint" button in the `ESC` pause menu with screen-space mouse hit-testing.
 - [x] **Silent Unarmed Input Handling**: Pressing `[Space]` without a blaster or `[E]` without a totem now silently does nothing (no popups/distractions).
 - [x] **Readable Checkpoint Notification**: Extended checkpoint saved banner duration to 2500ms with a gentle pop-in and smooth fade-out.
 - [x] **Checkpoint Snapshot & Section Rollback**: Checkpoint activation saves a state snapshot. Dying respawns Melissa at the active checkpoint, keeps all progress achieved *before* the checkpoint intact, and cleanly respawns only items, powerups, and enemies located *ahead* of the checkpoint.
 - [x] **Input Release / Key Lift on Respawn**: Reset and require key lift (re-press) for all movement/jump keys (`WASD`, `Arrow Keys`, `Left Click`) upon death respawn or run restart to prevent buffered/held inputs from instantly triggering unintended actions.
-- [x] **Always-Equipped Direct Abilities (`[Space]` & `[E]`)**: Removed hotbar slot switching. `[Space]` fires blaster directly, `[E]` activates shield totem directly, supported by a clean dual equipment status HUD.
-- [x] **Left-Click Mouse Jump**: Left mouse click support with variable jump height (short hops on early release).
+- [x] **Always-Equipped Direct Abilities (`[L-Click]` & `[E]`)**: Removed hotbar slot switching. `[L-Click]` fires blaster directly, `[E]` activates shield totem directly, supported by a clean dual equipment status HUD.
 - [x] **Pipe Monster Piranha Plant Proximity**: Monsters stay hidden inside pipes when the player is standing on or hovering over them, with fast pop speeds and natural randomized intervals.
 - [x] **Generalized Multi-Checkpoint System (`Checkpoint1`, `Checkpoint2`, etc.)**: Support custom Trigger Zones (`Checkpoint1Zone`, `Checkpoint2Zone`) and target Spawn Points (`Checkpoint1`, `Checkpoint2`) in Tiled with fanfare celebrations, screen flash, audio chimes, and death respawning.
 - [x] **Fake Ground & Illusory Walls (`FakeGround`)**: Support `FakeGround` objects in Tiled filled seamlessly with repeating `plainGround.png`.
@@ -37,7 +40,6 @@
 - [ ] **Air / Flying Mobs**: Add aerial swooping / hovering patrol hazards.
 - [ ] **Stage Clear / Victory Trigger**: Add an end-of-stage goal portal / artifact that stops the speedrun timer and shows a victory summary screen.
 - [ ] **Mini-Boss Encounter**: Add an end-of-stage mini-boss challenge before the final exit.
-- [ ] **Disable Physics Debugging**: Turn off `debug: false` in `src/main.ts` before release.
 
 ---
 

@@ -112,7 +112,13 @@ export class MainStageScene extends Phaser.Scene {
         // Initialize Managers
         this.soundManager = new SoundManager(this);
         this.uiManager = new UIManager(this, this.soundManager);
-        this.uiManager.createHUD();
+        this.uiManager.createHUD(() => {
+            if (this.isGamePaused) {
+                this.resumeGame();
+            } else {
+                this.pauseGame();
+            }
+        });
 
         this.player = new Player(this, spawnX, spawnY, this.soundManager);
         this.player.spawnX = spawnX; this.player.spawnY = spawnY;
@@ -147,7 +153,7 @@ export class MainStageScene extends Phaser.Scene {
             this.inventoryManager.saveCheckpointSnapshot();
         });
 
-        // Player death event: rollback state to active checkpoint snapshot (respawns only items & enemies ahead of checkpoint)
+        // Player death event: rollback state to active checkpoint snapshot
         this.events.on('player-death', () => {
             this.totalDeaths++;
             this.collectiblesManager.rollbackToCheckpoint();
@@ -237,6 +243,7 @@ export class MainStageScene extends Phaser.Scene {
         this.soundManager.playMenuSelect();
 
         const formattedTime = this.getFormattedElapsedTime();
+        const hasCheckpoint = this.envManager.hasActiveCheckpoint();
 
         this.uiManager.showPauseMenu(
             () => this.resumeGame(),
@@ -246,7 +253,8 @@ export class MainStageScene extends Phaser.Scene {
                 time: formattedTime,
                 deaths: this.totalDeaths,
                 coins: this.collectiblesManager.coinsCollected,
-                kills: this.enemyManager.enemiesKilled
+                kills: this.enemyManager.enemiesKilled,
+                hasCheckpoint: hasCheckpoint
             }
         );
     }
@@ -276,7 +284,7 @@ export class MainStageScene extends Phaser.Scene {
         this.player.bullets.clear(true, true);
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RESPAWNED AT CHECKPOINT', '#38BDF8', 1200);
-        this.soundManager.playPowerup();
+        this.soundManager?.playPowerup();
     }
 
     private restartFullRun() {
@@ -307,7 +315,7 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.resetCheckpoints();
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8', 1200);
-        this.soundManager.playPowerup();
+        this.soundManager?.playPowerup();
     }
 
     private getFormattedElapsedTime(): string {

@@ -63,6 +63,10 @@ export class EnvironmentManager {
         this.soundManager = soundManager;
     }
 
+    public hasActiveCheckpoint(): boolean {
+        return this.checkpoints.some(cp => cp.activated);
+    }
+
     setupCheckpoints(rawMapObjects: any[]) {
         this.checkpoints = [];
 
@@ -439,7 +443,6 @@ export class EnvironmentManager {
                     this.player.lastSafeY = cp.spawnY;
 
                     this.scene.cameras.main.flash(200, 255, 255, 255);
-                    // Linger longer (2500ms) with gentle fade so players have ample time to read
                     this.uiManager.showFloatingText(cp.spawnX, cp.spawnY - 20, cp.label, '#FFD700', 2500, 30);
                     this.uiManager.spawnParticles(cp.spawnX, cp.spawnY, 0xFFD700);
                     this.soundManager?.playCheckpoint();
