@@ -88,7 +88,7 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
         this.load.image('fall-l', 'assets/sprites/player/Melissa_Fall2_L.png');
         this.load.spritesheet('walk-r', 'assets/sprites/player/Melissa_Walk_Anim_R.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('walk-l', 'assets/sprites/player/Melissa_Walk_Anim_L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('walk-l', 'assets/sprites/player/new_player.png', { frameWidth: 32, frameHeight: 32 });
     }
 
     create() {
@@ -140,16 +140,20 @@ export class MainStageScene extends Phaser.Scene {
         
         this.collectiblesManager.setupCollectibles(map);
 
-        // Listen for player death event
-        this.events.on('player-death', () => {
-            this.totalDeaths++;
-            this.enemyManager.clearBullets();
-            this.player.bullets.clear(true, true);
+        // Checkpoint snapshot listener
+        this.events.on('checkpoint-saved', () => {
+            this.collectiblesManager.saveCheckpointSnapshot();
+            this.enemyManager.saveCheckpointSnapshot();
+            this.inventoryManager.saveCheckpointSnapshot();
         });
 
-        // Listen for empty gun trigger
-        this.events.on('empty-gun-shot', (x: number, y: number) => {
-            this.uiManager.showFloatingText(x, y - 20, 'NO GUN AVAILABLE', '#EF4444');
+        // Player death event: rollback state to active checkpoint snapshot (respawns only items & enemies ahead of checkpoint)
+        this.events.on('player-death', () => {
+            this.totalDeaths++;
+            this.collectiblesManager.rollbackToCheckpoint();
+            this.enemyManager.rollbackToCheckpoint();
+            this.inventoryManager.rollbackToCheckpoint();
+            this.player.bullets.clear(true, true);
         });
 
         // ESC Key listener for Pause Menu
@@ -236,6 +240,7 @@ export class MainStageScene extends Phaser.Scene {
 
         this.uiManager.showPauseMenu(
             () => this.resumeGame(),
+            () => this.respawnAtActiveCheckpoint(),
             () => this.restartFullRun(),
             {
                 time: formattedTime,
@@ -254,6 +259,24 @@ export class MainStageScene extends Phaser.Scene {
         this.player.anims.resume();
         this.uiManager.hidePauseMenu();
         this.soundManager.playMenuSelect();
+    }
+
+    private respawnAtActiveCheckpoint() {
+        this.resumeGame();
+        this.totalDeaths++;
+        this.player.setPosition(this.player.activeSpawnX, this.player.activeSpawnY);
+        this.player.setVelocity(0, 0);
+        this.player.anims.stop();
+        this.player.setTexture(this.player.facing === 'right' ? 'idle-r' : 'idle-l');
+        this.player.enforceKeyLift();
+
+        this.collectiblesManager.rollbackToCheckpoint();
+        this.enemyManager.rollbackToCheckpoint();
+        this.inventoryManager.rollbackToCheckpoint();
+        this.player.bullets.clear(true, true);
+
+        this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RESPAWNED AT CHECKPOINT', '#38BDF8', 1200);
+        this.soundManager.playPowerup();
     }
 
     private restartFullRun() {
@@ -275,6 +298,7 @@ export class MainStageScene extends Phaser.Scene {
         this.player.hasTotem = false;
         this.player.clearTint();
         this.player.bullets.clear(true, true);
+        this.player.enforceKeyLift();
 
         this.collectiblesManager.resetAll();
         this.enemyManager.resetAll();
@@ -282,7 +306,7 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.resetAll();
         this.envManager.resetCheckpoints();
 
-        this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8');
+        this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8', 1200);
         this.soundManager.playPowerup();
     }
 

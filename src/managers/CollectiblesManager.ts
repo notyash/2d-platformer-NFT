@@ -20,6 +20,10 @@ export class CollectiblesManager {
     public coinsCollected: number = 0;
     private collectedItemKeys: Set<string> = new Set();
 
+    // Checkpoint Snapshots
+    private savedCheckpointCollectedKeys: Set<string> = new Set();
+    private savedCheckpointCoins: number = 0;
+
     constructor(
         scene: Phaser.Scene, 
         player: Player, 
@@ -41,10 +45,24 @@ export class CollectiblesManager {
     setupCollectibles(map: Phaser.Tilemaps.Tilemap) {
         this.map = map;
         this.spawnAllCollectibles();
+        this.saveCheckpointSnapshot();
+    }
+
+    public saveCheckpointSnapshot() {
+        this.savedCheckpointCollectedKeys = new Set(this.collectedItemKeys);
+        this.savedCheckpointCoins = this.coinsCollected;
+    }
+
+    public rollbackToCheckpoint() {
+        this.collectedItemKeys = new Set(this.savedCheckpointCollectedKeys);
+        this.coinsCollected = this.savedCheckpointCoins;
+        if (this.map) {
+            this.spawnAllCollectibles();
+        }
     }
 
     public spawnAllCollectibles() {
-        // Clear existing sprites
+        // Clear existing active sprites
         this.coinSprites.forEach(s => { if (s && s.active) s.destroy(); });
         this.gunSprites.forEach(s => { if (s && s.active) s.destroy(); });
         this.totemSprites.forEach(s => { if (s && s.active) s.destroy(); });
@@ -75,7 +93,9 @@ export class CollectiblesManager {
 
     public resetAll() {
         this.coinsCollected = 0;
+        this.savedCheckpointCoins = 0;
         this.collectedItemKeys.clear();
+        this.savedCheckpointCollectedKeys.clear();
         if (this.map) {
             this.spawnAllCollectibles();
         }
@@ -88,7 +108,7 @@ export class CollectiblesManager {
         objects.forEach((obj: any) => {
             const uniqueKey = `${name}_${Math.round(obj.x)}_${Math.round(obj.y)}`;
 
-            // Skip items already collected in this run
+            // Skip items that were collected BEFORE the active checkpoint
             if (this.collectedItemKeys.has(uniqueKey)) {
                 obj.destroy();
                 return;

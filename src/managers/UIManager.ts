@@ -34,29 +34,150 @@ export class UIManager {
     private deathButtonLabels: Phaser.GameObjects.Text[] = [];
     private deathHighlight?: Phaser.GameObjects.Graphics;
 
-    // Keys for menu navigation
-    private keyUp?: Phaser.Input.Keyboard.Key;
-    private keyDown?: Phaser.Input.Keyboard.Key;
-    private keyW?: Phaser.Input.Keyboard.Key;
-    private keyS?: Phaser.Input.Keyboard.Key;
-    private keyEnter?: Phaser.Input.Keyboard.Key;
-    private keySpace?: Phaser.Input.Keyboard.Key;
+    // Menu Geometry Constants (Screen Coordinates)
+    private readonly pauseModalX = 640;
+    private readonly pauseModalY = 240;
+    private readonly pauseStartBtnY = 182; // 240 - 58
+    private readonly pauseBtnGap = 42;
+    private readonly pauseBtnWidth = 280;
+    private readonly pauseBtnHeight = 34;
+
+    private readonly deathModalX = 640;
+    private readonly deathModalY = 240;
+    private readonly deathBtnY = 292; // 240 + 52
+    private readonly deathBtnWidth = 320;
+    private readonly deathBtnHeight = 44;
 
     constructor(scene: Phaser.Scene, soundManager?: SoundManager) {
         this.scene = scene;
         this.soundManager = soundManager;
-        this.setupKeyboard();
+        
+        // Global Keyboard Event Listener
+        window.addEventListener('keydown', this.handleGlobalKeyDown, { capture: true });
+        
+        // Global Pointer Move & Down Listeners (Screen coordinates immune to camera scrolling)
+        this.scene.input.on('pointermove', this.handlePointerMove);
+        this.scene.input.on('pointerdown', this.handlePointerDown);
+
+        this.scene.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            window.removeEventListener('keydown', this.handleGlobalKeyDown, { capture: true });
+            this.scene.input.off('pointermove', this.handlePointerMove);
+            this.scene.input.off('pointerdown', this.handlePointerDown);
+        });
     }
 
-    private setupKeyboard() {
-        if (!this.scene.input.keyboard) return;
-        this.keyUp = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-        this.keyDown = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-        this.keyW = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-        this.keyS = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-        this.keyEnter = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
-        this.keySpace = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    }
+    private handlePointerMove = (pointer: Phaser.Input.Pointer) => {
+        if (this.isPauseMenuOpen) {
+            const px = pointer.x;
+            const py = pointer.y;
+            const halfW = this.pauseBtnWidth / 2;
+            const halfH = this.pauseBtnHeight / 2;
+
+            for (let i = 0; i < this.menuOptions.length; i++) {
+                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                if (
+                    px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
+                    py >= btnY - halfH && py <= btnY + halfH
+                ) {
+                    if (this.selectedMenuIndex !== i) {
+                        this.selectedMenuIndex = i;
+                        this.soundManager?.playMenuSelect();
+                        this.updateMenuVisuals();
+                    }
+                    break;
+                }
+            }
+            return;
+        }
+
+        if (this.isDeathScreenOpen) {
+            const px = pointer.x;
+            const py = pointer.y;
+            const halfW = this.deathBtnWidth / 2;
+            const halfH = this.deathBtnHeight / 2;
+
+            if (
+                px >= this.deathModalX - halfW && px <= this.deathModalX + halfW &&
+                py >= this.deathBtnY - halfH && py <= this.deathBtnY + halfH
+            ) {
+                if (this.selectedDeathIndex !== 0) {
+                    this.selectedDeathIndex = 0;
+                    this.soundManager?.playMenuSelect();
+                    this.updateDeathVisuals();
+                }
+            }
+        }
+    };
+
+    private handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+        if (this.isPauseMenuOpen) {
+            const px = pointer.x;
+            const py = pointer.y;
+            const halfW = this.pauseBtnWidth / 2;
+            const halfH = this.pauseBtnHeight / 2;
+
+            for (let i = 0; i < this.menuOptions.length; i++) {
+                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                if (
+                    px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
+                    py >= btnY - halfH && py <= btnY + halfH
+                ) {
+                    this.selectedMenuIndex = i;
+                    this.triggerCurrentOption();
+                    break;
+                }
+            }
+            return;
+        }
+
+        if (this.isDeathScreenOpen) {
+            const px = pointer.x;
+            const py = pointer.y;
+            const halfW = this.deathBtnWidth / 2;
+            const halfH = this.deathBtnHeight / 2;
+
+            if (
+                px >= this.deathModalX - halfW && px <= this.deathModalX + halfW &&
+                py >= this.deathBtnY - halfH && py <= this.deathBtnY + halfH
+            ) {
+                this.selectedDeathIndex = 0;
+                this.triggerCurrentDeathOption();
+            }
+        }
+    };
+
+    private handleGlobalKeyDown = (event: KeyboardEvent) => {
+        if (this.isPauseMenuOpen) {
+            const key = event.code;
+            if (key === 'ArrowUp' || key === 'KeyW') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.selectedMenuIndex = (this.selectedMenuIndex - 1 + this.menuOptions.length) % this.menuOptions.length;
+                this.soundManager?.playMenuSelect();
+                this.updateMenuVisuals();
+            } else if (key === 'ArrowDown' || key === 'KeyS') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.selectedMenuIndex = (this.selectedMenuIndex + 1) % this.menuOptions.length;
+                this.soundManager?.playMenuSelect();
+                this.updateMenuVisuals();
+            } else if (key === 'Enter' || key === 'Space') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.triggerCurrentOption();
+            }
+            return;
+        }
+
+        if (this.isDeathScreenOpen) {
+            const key = event.code;
+            if (key === 'Enter' || key === 'Space') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.triggerCurrentDeathOption();
+            }
+        }
+    };
 
     createHUD() {
         this.hudText = this.scene.add.text(16, 16, '', { 
@@ -70,19 +191,46 @@ export class UIManager {
     }
 
     updateHUD(formattedTime: string, coins: number, kills: number, deaths: number) {
-        // Pure ASCII text to avoid multi-byte emoji encoding issues
         this.hudText.setText(`TIME: ${formattedTime}   |   DEATHS: ${deaths}   |   COINS: ${coins}   |   KILLS: ${kills}`);
     }
 
-    showFloatingText(x: number, y: number, message: string, color: string) {
+    showFloatingText(x: number, y: number, message: string, color: string, duration: number = 800, distance: number = 40) {
         const floatText = this.scene.add.text(x, y, message, { 
             fontSize: '18px', fontFamily: 'Arial', color: color, stroke: '#000000', strokeThickness: 4, fontStyle: 'bold' 
         }).setOrigin(0.5).setDepth(30);
-        
-        this.scene.tweens.add({ 
-            targets: floatText, y: y - 40, alpha: 0, duration: 800, ease: 'Cubic.easeOut', 
-            onComplete: () => floatText.destroy() 
-        });
+
+        if (duration > 1200) {
+            floatText.setScale(0.85);
+            this.scene.tweens.add({
+                targets: floatText,
+                scale: 1.1,
+                duration: 200,
+                yoyo: true,
+                repeat: 0,
+                ease: 'Back.easeOut'
+            });
+
+            this.scene.tweens.add({
+                targets: floatText,
+                y: y - distance,
+                duration: duration * 0.4,
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    this.scene.tweens.add({
+                        targets: floatText,
+                        alpha: 0,
+                        duration: duration * 0.6,
+                        ease: 'Linear',
+                        onComplete: () => floatText.destroy()
+                    });
+                }
+            });
+        } else {
+            this.scene.tweens.add({ 
+                targets: floatText, y: y - distance, alpha: 0, duration: duration, ease: 'Cubic.easeOut', 
+                onComplete: () => floatText.destroy() 
+            });
+        }
     }
 
     spawnParticles(x: number, y: number, color: number) {
@@ -96,6 +244,7 @@ export class UIManager {
 
     showPauseMenu(
         onResume: () => void, 
+        onRespawnCheckpoint: () => void,
         onRestart: () => void, 
         stats: { time: string; deaths: number; coins: number; kills: number }
     ) {
@@ -103,31 +252,31 @@ export class UIManager {
         this.isPauseMenuOpen = true;
         this.selectedMenuIndex = 0;
 
+        if (this.scene.game.canvas) {
+            this.scene.game.canvas.focus();
+        }
+
         this.pauseContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
         // Dark dimming backdrop
-        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x000000, 0.75)
-            .setInteractive(); // Intercepts clicks behind menu
+        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x000000, 0.75);
         this.pauseContainer.add(backdrop);
 
         // Modal Frame
         const modalWidth = 380;
-        const modalHeight = 330;
-        const modalX = 640;
-        const modalY = 240;
-
-        const modalBg = this.scene.add.rectangle(modalX, modalY, modalWidth, modalHeight, 0x0f172a, 0.95)
+        const modalHeight = 360;
+        const modalBg = this.scene.add.rectangle(this.pauseModalX, this.pauseModalY, modalWidth, modalHeight, 0x0f172a, 0.95)
             .setStrokeStyle(2.5, 0x38bdf8, 0.9);
         this.pauseContainer.add(modalBg);
 
         // Title
-        const title = this.scene.add.text(modalX, modalY - 130, 'GAME PAUSED', {
+        const title = this.scene.add.text(this.pauseModalX, this.pauseModalY - 145, 'GAME PAUSED', {
             fontSize: '22px', fontFamily: 'Arial', color: '#38bdf8', stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
         }).setOrigin(0.5);
         this.pauseContainer.add(title);
 
         // Run Stats Summary
-        const statsSummary = this.scene.add.text(modalX, modalY - 90, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
+        const statsSummary = this.scene.add.text(this.pauseModalX, this.pauseModalY - 108, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
             fontSize: '12px', fontFamily: 'Arial', color: '#94a3b8', align: 'center', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
         }).setOrigin(0.5);
         this.pauseContainer.add(statsSummary);
@@ -135,7 +284,8 @@ export class UIManager {
         // Define Menu Options
         this.menuOptions = [
             { id: 'resume', label: 'Resume Game', action: onResume },
-            { id: 'restart', label: 'Restart Run', action: onRestart },
+            { id: 'respawn', label: 'Respawn at Checkpoint', action: onRespawnCheckpoint },
+            { id: 'restart', label: 'Restart Full Run (0%)', action: onRestart },
             { 
                 id: 'sound', 
                 label: `Sound FX: ${this.soundEnabled ? 'ON' : 'OFF'}`, 
@@ -163,43 +313,22 @@ export class UIManager {
         this.menuButtonBoxes = [];
         this.menuButtonLabels = [];
 
-        const startBtnY = modalY - 40;
-        const btnGap = 46;
-        const btnWidth = 280;
-        const btnHeight = 36;
-
         for (let i = 0; i < this.menuOptions.length; i++) {
             const opt = this.menuOptions[i];
-            const btnY = startBtnY + (i * btnGap);
+            const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
 
             // Button Box
-            const box = this.scene.add.rectangle(modalX, btnY, btnWidth, btnHeight, 0x1e293b, 0.9)
-                .setStrokeStyle(1.5, 0x475569)
-                .setInteractive({ useHandCursor: true });
+            const box = this.scene.add.rectangle(this.pauseModalX, btnY, this.pauseBtnWidth, this.pauseBtnHeight, 0x1e293b, 0.9)
+                .setStrokeStyle(1.5, 0x475569);
 
             // Button Label
-            const label = this.scene.add.text(modalX, btnY, opt.label, {
-                fontSize: '14px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2.5
+            const label = this.scene.add.text(this.pauseModalX, btnY, opt.label, {
+                fontSize: '13px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2.5
             }).setOrigin(0.5);
 
             if (opt.id === 'sound') {
                 this.soundLabelRef = label;
             }
-
-            // Mouse interactions
-            const index = i;
-            box.on('pointerover', () => {
-                if (this.selectedMenuIndex !== index) {
-                    this.selectedMenuIndex = index;
-                    this.soundManager?.playMenuSelect();
-                    this.updateMenuVisuals();
-                }
-            });
-
-            box.on('pointerdown', () => {
-                this.selectedMenuIndex = index;
-                this.triggerCurrentOption();
-            });
 
             this.menuButtonBoxes.push(box);
             this.menuButtonLabels.push(label);
@@ -210,39 +339,31 @@ export class UIManager {
         this.selectionHighlight = this.scene.add.graphics();
         this.pauseContainer.add(this.selectionHighlight);
 
+        // Check if pointer is currently hovering over any button upon open
+        const pointer = this.scene.input.activePointer;
+        if (pointer) {
+            const px = pointer.x;
+            const py = pointer.y;
+            const halfW = this.pauseBtnWidth / 2;
+            const halfH = this.pauseBtnHeight / 2;
+
+            for (let i = 0; i < this.menuOptions.length; i++) {
+                const btnY = this.pauseStartBtnY + (i * this.pauseBtnGap);
+                if (
+                    px >= this.pauseModalX - halfW && px <= this.pauseModalX + halfW &&
+                    py >= btnY - halfH && py <= btnY + halfH
+                ) {
+                    this.selectedMenuIndex = i;
+                    break;
+                }
+            }
+        }
+
         this.updateMenuVisuals();
     }
 
     public updatePauseMenu() {
-        if (!this.isPauseMenuOpen) return;
-
-        // Up Navigation
-        if (
-            (this.keyUp && Phaser.Input.Keyboard.JustDown(this.keyUp)) || 
-            (this.keyW && Phaser.Input.Keyboard.JustDown(this.keyW))
-        ) {
-            this.selectedMenuIndex = (this.selectedMenuIndex - 1 + this.menuOptions.length) % this.menuOptions.length;
-            this.soundManager?.playMenuSelect();
-            this.updateMenuVisuals();
-        }
-
-        // Down Navigation
-        if (
-            (this.keyDown && Phaser.Input.Keyboard.JustDown(this.keyDown)) || 
-            (this.keyS && Phaser.Input.Keyboard.JustDown(this.keyS))
-        ) {
-            this.selectedMenuIndex = (this.selectedMenuIndex + 1) % this.menuOptions.length;
-            this.soundManager?.playMenuSelect();
-            this.updateMenuVisuals();
-        }
-
-        // Enter or Space to Select
-        if (
-            (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
-            (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
-        ) {
-            this.triggerCurrentOption();
-        }
+        // Handled via window & screen pointer listeners
     }
 
     private triggerCurrentOption() {
@@ -262,13 +383,16 @@ export class UIManager {
             const isSelected = (i === this.selectedMenuIndex);
 
             if (isSelected) {
-                // Highlighted button
-                if (i === 1) {
-                    // Restart button (Red hue)
+                if (i === 2) {
+                    // Restart Full Run (Red)
                     box.setFillStyle(0xb91c1c, 0.95);
                     box.setStrokeStyle(2, 0xf87171);
+                } else if (i === 1) {
+                    // Respawn at Checkpoint (Amber / Gold)
+                    box.setFillStyle(0xb45309, 0.95);
+                    box.setStrokeStyle(2, 0xfbbf24);
                 } else {
-                    // Standard option (Cyan hue)
+                    // Standard option (Cyan)
                     box.setFillStyle(0x0284c7, 0.95);
                     box.setStrokeStyle(2, 0x38bdf8);
                 }
@@ -276,7 +400,6 @@ export class UIManager {
                 label.setScale(1.02);
                 label.setColor('#ffffff');
             } else {
-                // Unselected button
                 box.setFillStyle(0x1e293b, 0.85);
                 box.setStrokeStyle(1.5, 0x475569);
                 box.setScale(1);
@@ -285,11 +408,13 @@ export class UIManager {
             }
         }
 
-        // Draw animated/bright border highlight around active box
         this.selectionHighlight.clear();
         const activeBox = this.menuButtonBoxes[this.selectedMenuIndex];
         if (activeBox) {
-            const borderColor = (this.selectedMenuIndex === 1) ? 0xfca5a5 : 0x7dd3fc;
+            let borderColor = 0x7dd3fc;
+            if (this.selectedMenuIndex === 2) borderColor = 0xfca5a5;
+            else if (this.selectedMenuIndex === 1) borderColor = 0xfde047;
+
             this.selectionHighlight.lineStyle(3, borderColor, 1);
             this.selectionHighlight.strokeRoundedRect(
                 activeBox.x - (activeBox.width * activeBox.scaleX / 2) - 3,
@@ -318,30 +443,29 @@ export class UIManager {
         this.isDeathScreenOpen = true;
         this.selectedDeathIndex = 0;
 
+        if (this.scene.game.canvas) {
+            this.scene.game.canvas.focus();
+        }
+
         this.deathContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(150);
 
         // Dark Crimson Vignette Backdrop
-        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x0a0000, 0.85)
-            .setInteractive();
+        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x0a0000, 0.85);
         this.deathContainer.add(backdrop);
 
         // Modal Frame
         const modalWidth = 420;
         const modalHeight = 300;
-        const modalX = 640;
-        const modalY = 240;
-
-        const modalBg = this.scene.add.rectangle(modalX, modalY, modalWidth, modalHeight, 0x180808, 0.96)
+        const modalBg = this.scene.add.rectangle(this.deathModalX, this.deathModalY, modalWidth, modalHeight, 0x180808, 0.96)
             .setStrokeStyle(2.5, 0xef4444, 0.95);
         this.deathContainer.add(modalBg);
 
-        // Dramatic Title
-        const title = this.scene.add.text(modalX, modalY - 105, 'YOU DIED', {
+        // Title
+        const title = this.scene.add.text(this.deathModalX, this.deathModalY - 105, 'YOU DIED', {
             fontSize: '32px', fontFamily: 'Arial', color: '#ef4444', stroke: '#450a0a', strokeThickness: 5, fontStyle: 'bold'
         }).setOrigin(0.5);
         this.deathContainer.add(title);
 
-        // Gentle pulse animation on title
         this.scene.tweens.add({
             targets: title,
             scale: 1.06,
@@ -351,21 +475,18 @@ export class UIManager {
             ease: 'Sine.easeInOut'
         });
 
-        // Subtitle / Prompt
-        const subtitle = this.scene.add.text(modalX, modalY - 65, 'Press ENTER or SPACE to Try Again', {
+        const subtitle = this.scene.add.text(this.deathModalX, this.deathModalY - 65, 'Press ENTER or SPACE to Try Again', {
             fontSize: '13px', fontFamily: 'Arial', color: '#fca5a5', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
         }).setOrigin(0.5);
         this.deathContainer.add(subtitle);
 
-        // Stats Box Card
-        const statsBox = this.scene.add.rectangle(modalX, modalY - 18, 360, 50, 0x0f0404, 0.9)
+        const statsBox = this.scene.add.rectangle(this.deathModalX, this.deathModalY - 18, 360, 50, 0x0f0404, 0.9)
             .setStrokeStyle(1.5, 0x7f1d1d);
-        const statsText = this.scene.add.text(modalX, modalY - 18, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
+        const statsText = this.scene.add.text(this.deathModalX, this.deathModalY - 18, `TIME: ${stats.time}   |   DEATHS: ${stats.deaths}\nCOINS: ${stats.coins}   |   KILLS: ${stats.kills}`, {
             fontSize: '12px', fontFamily: 'Arial', color: '#e2e8f0', align: 'center', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
         }).setOrigin(0.5);
         this.deathContainer.add([statsBox, statsText]);
 
-        // Menu Option
         this.deathOptions = [
             { id: 'restart', label: 'Try Again (Restart Stage)', action: onRestart }
         ];
@@ -373,34 +494,17 @@ export class UIManager {
         this.deathButtonBoxes = [];
         this.deathButtonLabels = [];
 
-        const btnY = modalY + 52;
-        const btnWidth = 320;
-        const btnHeight = 44;
+        const box = this.scene.add.rectangle(this.deathModalX, this.deathBtnY, this.deathBtnWidth, this.deathBtnHeight, 0xb91c1c, 0.95)
+            .setStrokeStyle(2, 0xf87171);
 
-        const box = this.scene.add.rectangle(modalX, btnY, btnWidth, btnHeight, 0xb91c1c, 0.95)
-            .setStrokeStyle(2, 0xf87171)
-            .setInteractive({ useHandCursor: true });
-
-        const label = this.scene.add.text(modalX, btnY, this.deathOptions[0].label, {
+        const label = this.scene.add.text(this.deathModalX, this.deathBtnY, this.deathOptions[0].label, {
             fontSize: '15px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2.5
         }).setOrigin(0.5);
-
-        box.on('pointerover', () => {
-            this.selectedDeathIndex = 0;
-            this.soundManager?.playMenuSelect();
-            this.updateDeathVisuals();
-        });
-
-        box.on('pointerdown', () => {
-            this.selectedDeathIndex = 0;
-            this.triggerCurrentDeathOption();
-        });
 
         this.deathButtonBoxes.push(box);
         this.deathButtonLabels.push(label);
         this.deathContainer.add([box, label]);
 
-        // Selection Highlight
         this.deathHighlight = this.scene.add.graphics();
         this.deathContainer.add(this.deathHighlight);
 
@@ -408,15 +512,7 @@ export class UIManager {
     }
 
     public updateDeathMenu() {
-        if (!this.isDeathScreenOpen) return;
-
-        // Enter or Space to Select
-        if (
-            (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter)) ||
-            (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace))
-        ) {
-            this.triggerCurrentDeathOption();
-        }
+        // Handled via window & screen pointer listeners
     }
 
     private triggerCurrentDeathOption() {

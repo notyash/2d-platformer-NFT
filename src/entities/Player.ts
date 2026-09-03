@@ -37,7 +37,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     public bullets: Phaser.Physics.Arcade.Group;
     public soundManager?: SoundManager;
-    private lastEmptyShotTime: number = 0;
+
+    // Key Lift on Respawn State (prevents held keys from triggering actions immediately on respawn)
+    private requireKeyLift = {
+        left: false,
+        right: false,
+        up: false,
+        space: false,
+        mouse: false
+    };
 
     constructor(scene: Phaser.Scene, x: number, y: number, soundManager?: SoundManager) {
         super(scene, x, y, 'idle-r');
@@ -64,6 +72,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.bullets = scene.physics.add.group({ allowGravity: false });
     }
 
+    public enforceKeyLift() {
+        const rawLeft = this.cursors.left.isDown || (this.keyA && this.keyA.isDown);
+        const rawRight = this.cursors.right.isDown || (this.keyD && this.keyD.isDown);
+        const rawUp = this.cursors.up.isDown || (this.keyW && this.keyW.isDown);
+        const rawSpace = this.spaceKey.isDown;
+        const pointer = this.scene.input.activePointer;
+        const rawMouse = Boolean(pointer && pointer.isDown);
+
+        this.requireKeyLift.left = rawLeft;
+        this.requireKeyLift.right = rawRight;
+        this.requireKeyLift.up = rawUp;
+        this.requireKeyLift.space = rawSpace;
+        this.requireKeyLift.mouse = rawMouse;
+    }
+
     update() {
         const speed = 200, jumpSpeed = 400, shortHopCap = -150;
         const body = this.body as Phaser.Physics.Arcade.Body;
@@ -71,14 +94,25 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.setVelocityX(0);
 
-        // Check Left Mouse Button
         const pointer = this.scene.input.activePointer;
-        const isMouseJumpDown = Boolean(pointer && pointer.isDown && pointer.leftButtonDown());
 
-        // Support Arrow Keys, WASD, and Left Mouse Click for Jump
-        const isLeftDown = this.cursors.left.isDown || this.keyA.isDown;
-        const isRightDown = this.cursors.right.isDown || this.keyD.isDown;
-        const isUpDown = this.cursors.up.isDown || this.keyW.isDown || isMouseJumpDown;
+        // 1. Evaluate Key Lift Releases (once lifted, the key is unlocked)
+        const rawLeftDown = this.cursors.left.isDown || this.keyA.isDown;
+        const rawRightDown = this.cursors.right.isDown || this.keyD.isDown;
+        const rawUpDown = this.cursors.up.isDown || this.keyW.isDown;
+        const rawMouseDown = Boolean(pointer && pointer.isDown && pointer.leftButtonDown());
+
+        if (!rawLeftDown) this.requireKeyLift.left = false;
+        if (!rawRightDown) this.requireKeyLift.right = false;
+        if (!rawUpDown) this.requireKeyLift.up = false;
+        if (!rawMouseDown) this.requireKeyLift.mouse = false;
+        if (!this.spaceKey.isDown) this.requireKeyLift.space = false;
+
+        // 2. Filter inputs through Key Lift guard
+        const isLeftDown = rawLeftDown && !this.requireKeyLift.left;
+        const isRightDown = rawRightDown && !this.requireKeyLift.right;
+        const isMouseJumpDown = rawMouseDown && !this.requireKeyLift.mouse;
+        const isUpDown = (rawUpDown && !this.requireKeyLift.up) || isMouseJumpDown;
 
         if (isLeftDown) { 
             this.setVelocityX(-speed); 
@@ -110,12 +144,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.isNormalJump = false; 
         }
 
-        if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+        // Space key shoots only if gun is equipped (silent when no gun)
+        if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && !this.requireKeyLift.space) {
             if (this.hasGun) {
                 this.shootBullet();
-            } else if (this.scene.time.now > this.lastEmptyShotTime + 500) {
-                this.lastEmptyShotTime = this.scene.time.now;
-                this.scene.events.emit('empty-gun-shot', this.x, this.y);
             }
         }
 
@@ -189,6 +221,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.setVelocity(0, 0); 
             this.setTint(0xffaa00); 
             this.soundManager?.playDeath();
+            this.enforceKeyLift();
             this.scene.time.delayedCall(2000, () => {
                 this.isInvincible = false;
                 if (this.hasGun) this.setTint(0x00ffff); 
@@ -205,6 +238,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.hasGun = false; 
         this.clearTint();
         this.soundManager?.playDeath();
+        this.enforceKeyLift();
 
         // Emit death event for collectibles & mobs reset
         this.scene.events.emit('player-death');

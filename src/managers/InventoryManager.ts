@@ -13,6 +13,12 @@ export class InventoryManager {
     public gunCount: number = 0;
     public totemCount: number = 0;
 
+    // Checkpoint Snapshots
+    private savedCheckpointGunCount: number = 0;
+    private savedCheckpointTotemCount: number = 0;
+    private savedCheckpointHasGun: boolean = false;
+    private savedCheckpointHasTotem: boolean = false;
+
     private keyE!: Phaser.Input.Keyboard.Key;
 
     // Dynamic Equipment Badges Container
@@ -36,6 +42,22 @@ export class InventoryManager {
 
         this.setupInputs();
         this.createEquipmentUI();
+        this.saveCheckpointSnapshot();
+    }
+
+    public saveCheckpointSnapshot() {
+        this.savedCheckpointGunCount = this.gunCount;
+        this.savedCheckpointTotemCount = this.totemCount;
+        this.savedCheckpointHasGun = this.player.hasGun;
+        this.savedCheckpointHasTotem = this.player.hasTotem;
+    }
+
+    public rollbackToCheckpoint() {
+        this.gunCount = this.savedCheckpointGunCount;
+        this.totemCount = this.savedCheckpointTotemCount;
+        this.player.hasGun = this.savedCheckpointHasGun;
+        this.player.hasTotem = this.savedCheckpointHasTotem;
+        this.updateUI();
     }
 
     private setupInputs() {
@@ -103,7 +125,7 @@ export class InventoryManager {
 
     public activateShield() {
         if (this.player.hasTotem) {
-            this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'TOTEM ALREADY ACTIVE!', '#FFD700');
+            this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'TOTEM ALREADY ACTIVE!', '#FFD700', 1200);
             return;
         }
 
@@ -111,13 +133,12 @@ export class InventoryManager {
             this.totemCount--;
             this.player.hasTotem = true;
             this.updatePlayerTint();
-            this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'TOTEM ACTIVATED!', '#FFD700');
+            this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'TOTEM ACTIVATED!', '#FFD700', 1200);
             this.uiManager.spawnParticles(this.player.x, this.player.y, 0xFFD700);
             this.scene.cameras.main.shake(150, 0.006);
             this.soundManager?.playPowerup();
-        } else {
-            this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'NO TOTEM IN INVENTORY', '#EF4444');
         }
+        // When totemCount === 0: silently do nothing
 
         this.updateUI();
     }
@@ -126,9 +147,9 @@ export class InventoryManager {
         if (this.player.isInvincible) return;
 
         if (this.player.hasTotem) {
-            this.player.setTint(0xffd700); // Golden Totem Shield Aura
+            this.player.setTint(0xffd700);
         } else if (this.player.hasGun) {
-            this.player.setTint(0x00ffff); // Cyan Blaster Tint
+            this.player.setTint(0x00ffff);
         } else {
             this.player.clearTint();
         }
@@ -149,26 +170,20 @@ export class InventoryManager {
         const badgeWidth = 148;
         const spacing = 12;
 
-        // Position Badges Dynamically
         if (hasGun && hasTotem) {
-            // Both collected: Show side by side centered
             this.gunBadgeContainer.setVisible(true).setPosition(centerX - (badgeWidth / 2) - (spacing / 2), posY);
             this.totemBadgeContainer.setVisible(true).setPosition(centerX + (badgeWidth / 2) + (spacing / 2), posY);
         } else if (hasGun) {
-            // Only Gun collected: Single badge centered
             this.gunBadgeContainer.setVisible(true).setPosition(centerX, posY);
             this.totemBadgeContainer.setVisible(false);
         } else if (hasTotem) {
-            // Only Totem collected: Single badge centered
             this.gunBadgeContainer.setVisible(false);
             this.totemBadgeContainer.setVisible(true).setPosition(centerX, posY);
         } else {
-            // Neither collected: Hide both
             this.gunBadgeContainer.setVisible(false);
             this.totemBadgeContainer.setVisible(false);
         }
 
-        // Update Labels
         this.gunText.setText('[Space] Shoot');
 
         if (this.player.hasTotem) {
@@ -183,6 +198,10 @@ export class InventoryManager {
     public resetAll() {
         this.gunCount = 0;
         this.totemCount = 0;
+        this.savedCheckpointGunCount = 0;
+        this.savedCheckpointTotemCount = 0;
+        this.savedCheckpointHasGun = false;
+        this.savedCheckpointHasTotem = false;
         this.player.hasGun = false;
         this.player.hasTotem = false;
         this.player.clearTint();

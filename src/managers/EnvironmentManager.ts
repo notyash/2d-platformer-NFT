@@ -74,7 +74,6 @@ export class EnvironmentManager {
             const posX = obj.x + (obj.width ? obj.width / 2 : 0);
             const posY = obj.y + (obj.height ? obj.height : 0);
 
-            // Matches Checkpoint1, Checkpoint2, Checkpoint3, Checkpoint1Spawn, etc.
             if (/^(checkpoint|cp)\d*(spawn)?$/i.test(cleanName)) {
                 spawnPoints[cleanName] = { x: posX, y: posY };
                 spawnPoints[cleanName.replace('spawn', '')] = { x: posX, y: posY };
@@ -93,7 +92,6 @@ export class EnvironmentManager {
                 const zW = obj.width || 32;
                 const zH = obj.height || 48;
 
-                // Priority 1: Check if 'id' property is specified in Tiled
                 let cpId: number | string = 1;
                 if (obj.properties) {
                     const idProp = obj.properties.find((p: any) => p.name && (p.name.toLowerCase() === 'id' || p.name.toLowerCase() === 'checkpoint'));
@@ -122,7 +120,6 @@ export class EnvironmentManager {
                     }
                 }
 
-                // Match with target spawn point or fallback to zone position
                 let sX = zX, sY = zY + (zH / 2);
                 const matchedSpawn = spawnPoints[targetSpawnKey] || 
                                      spawnPoints[`checkpoint${cpId}`] ||
@@ -442,9 +439,13 @@ export class EnvironmentManager {
                     this.player.lastSafeY = cp.spawnY;
 
                     this.scene.cameras.main.flash(200, 255, 255, 255);
-                    this.uiManager.showFloatingText(cp.spawnX, cp.spawnY - 20, cp.label, '#FFD700');
+                    // Linger longer (2500ms) with gentle fade so players have ample time to read
+                    this.uiManager.showFloatingText(cp.spawnX, cp.spawnY - 20, cp.label, '#FFD700', 2500, 30);
                     this.uiManager.spawnParticles(cp.spawnX, cp.spawnY, 0xFFD700);
                     this.soundManager?.playCheckpoint();
+
+                    // Snapshot collected items and killed mobs up to this checkpoint
+                    this.scene.events.emit('checkpoint-saved');
                 }
             }
         }

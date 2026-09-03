@@ -20,6 +20,10 @@ export class EnemyManager {
     public enemiesKilled: number = 0;
     private killedEnemyKeys: Set<string> = new Set();
 
+    // Checkpoint Snapshots
+    private savedCheckpointKilledKeys: Set<string> = new Set();
+    private savedCheckpointKills: number = 0;
+
     private rawMapObjects: any[] = [];
     private groundLayer!: Phaser.Tilemaps.TilemapLayer;
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -41,6 +45,23 @@ export class EnemyManager {
         this.groundMobs = this.scene.physics.add.group();
         this.pipeMonsters = this.scene.physics.add.group({ allowGravity: false, immovable: true });
         this.enemyBullets = this.scene.physics.add.group({ allowGravity: false });
+    }
+
+    public saveCheckpointSnapshot() {
+        this.savedCheckpointKilledKeys = new Set(this.killedEnemyKeys);
+        this.savedCheckpointKills = this.enemiesKilled;
+    }
+
+    public rollbackToCheckpoint() {
+        this.killedEnemyKeys = new Set(this.savedCheckpointKilledKeys);
+        this.enemiesKilled = this.savedCheckpointKills;
+        this.clearBullets();
+        if (this.rawMapObjects.length > 0 && this.groundLayer && this.oneWayLayer) {
+            this.spawnGroundMobs();
+            if (this.map) {
+                this.spawnPipeMonsters();
+            }
+        }
     }
 
     setupGroundMobs(rawMapObjects: any[], groundLayer: Phaser.Tilemaps.TilemapLayer, oneWayLayer: Phaser.Tilemaps.TilemapLayer) {
@@ -122,6 +143,7 @@ export class EnemyManager {
         );
 
         this.spawnGroundMobs();
+        this.saveCheckpointSnapshot();
     }
 
     private spawnGroundMobs() {
@@ -139,7 +161,7 @@ export class EnemyManager {
         mobObjects.forEach((obj: any) => {
             const uniqueKey = `${obj.name}_${Math.round(obj.x)}_${Math.round(obj.y)}`;
 
-            // Skip mobs that have already been defeated in this run
+            // Skip mobs that were killed BEFORE the active checkpoint
             if (this.killedEnemyKeys.has(uniqueKey)) {
                 return;
             }
@@ -324,6 +346,7 @@ export class EnemyManager {
         });
 
         this.spawnPipeMonsters();
+        this.saveCheckpointSnapshot();
     }
 
     private killPipeMonster(monster: Phaser.GameObjects.Sprite) {
@@ -350,7 +373,7 @@ export class EnemyManager {
         monsterObjects.forEach((obj: any, index: number) => {
             const uniqueKey = `PipeMonster_${Math.round(obj.x)}_${Math.round(obj.y)}`;
 
-            // Skip pipe monsters already defeated in this run
+            // Skip pipe monsters killed BEFORE the active checkpoint
             if (this.killedEnemyKeys.has(uniqueKey)) {
                 obj.destroy();
                 return;
@@ -392,7 +415,9 @@ export class EnemyManager {
 
     public resetAll() {
         this.enemiesKilled = 0;
+        this.savedCheckpointKills = 0;
         this.killedEnemyKeys.clear();
+        this.savedCheckpointKilledKeys.clear();
         this.enemyBullets.clear(true, true);
         if (this.rawMapObjects.length > 0 && this.groundLayer && this.oneWayLayer) {
             this.spawnGroundMobs();
