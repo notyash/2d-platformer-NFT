@@ -1,20 +1,22 @@
 # Onion Boy - Project Roadmap & TODO List
 
 ## 🎮 Project Scope & Design Decisions
-- **Target Platform**: Desktop-first keyboard & mouse controls (`WASD` / `Arrows`, `Space` / `W` to Jump, `Left-Click` / `Left Ctrl` to Shoot, `[E]` to Activate Totem, `[ESC]` or Top-Right button for Pause Menu).
+- **Target Platform**: Desktop-first keyboard & mouse controls (`WASD` / `Arrows`, `Space` / `W` to Jump, `Left-Click` / `Left Ctrl` to Shoot, `[E]` to Activate Totem, `[C]` to Respawn at Checkpoint, `Double [R]` or Top-Right button to Restart Run, `[ESC]` or Top-Right button for Pause Menu).
 - **Boss Encounter**: Optional single mini-boss encounter at the end of the stage.
 - **Economy**: Defeating enemies (mobs, pipe monsters, shooters) awards +1 Coin.
 - **Backend & Web3 Integration**: Runs communicate with Rust/PostgreSQL backend for secure leaderboard logging, whitelist qualification, and anti-cheat verification.
 - **Always-Equipped Abilities**: No hotbar switching. `Left Click` or `Left Ctrl` shoots Blaster and `[E]` activates Shield Totem directly.
-- **Checkpoint Architecture**: Generalized Custom Checkpoints (`Checkpoint1Zone` -> `Checkpoint1`, `Checkpoint2Zone` -> `Checkpoint2`). Dying or selecting "Respawn at Checkpoint" rolls back state to checkpoint snapshot (respawns items/mobs ahead of checkpoint, keeps prior progress saved).
+- **Checkpoint Architecture**: Generalized Custom Checkpoints (`Checkpoint1Zone` -> `Checkpoint1`, `Checkpoint2Zone` -> `Checkpoint2`). Dying, pressing `[C]`, or selecting "Respawn at Checkpoint" rolls back state to checkpoint snapshot (respawns items/mobs ahead of checkpoint, keeps prior progress saved).
 
 ---
 
-## ?? Task List
+## 📋 Task List
 
-### ? Completed
-- [x] **Top-Right `[ESC] Menu` HUD Button**: Added a clickable `[ESC] Menu` button at the top-right of the screen for quick mouse and keyboard menu toggling.
-- [x] **Controls Rebinding (`Space` Jump & `Left-Click` Shoot)**: `Space`, `W`, and `Up Arrow` now trigger Jump (with variable jump height), while `Left Click` fires the Blaster Gun.
+### ✅ Completed
+- [x] **`[C]` Keybind for Quick Checkpoint Respawn**: Added instant reset to active checkpoint when pressing `C` (shows fallback feedback if no checkpoint is active yet).
+- [x] **Top-Right `[R+R] Restart Run` & `[ESC] Menu` HUD Buttons**: Added quick mouse-clickable buttons for instant run restart and pause menu toggling with custom hover styling.
+- [x] **`Double [R]` Keybind for Instant Run Restart**: Added double-tap confirmation on `R` key with on-screen prompt (`PRESS [R] AGAIN TO RESTART`) to prevent accidental run loss.
+- [x] **Controls Rebinding (`Space` Jump & `Left-Click` / `Left Ctrl` Shoot)**: `Space`, `W`, and `Up Arrow` trigger Jump (with variable jump height), while `Left Click` and `Left Ctrl` fire the Blaster Gun.
 - [x] **Disable Physics Debugging**: Turned off `debug: false` in `src/main.ts`.
 - [x] **Dynamic Checkpoint Pause Menu Option**: "Respawn at Checkpoint" now conditionally appears only when a checkpoint is achieved; renamed full run reset button to "Restart Full Run".
 - [x] **Pause Menu Checkpoint Respawn Option**: Added dedicated "Respawn at Checkpoint" button in the `ESC` pause menu with screen-space mouse hit-testing.

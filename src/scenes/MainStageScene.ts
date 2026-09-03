@@ -28,8 +28,10 @@ export class MainStageScene extends Phaser.Scene {
     private pauseStartTime: number = 0;
     public isGamePaused: boolean = false;
     public totalDeaths: number = 0;
-
+    private lastRPressTime: number = 0;
     private escKey!: Phaser.Input.Keyboard.Key;
+    private rKey!: Phaser.Input.Keyboard.Key;
+    private cKey!: Phaser.Input.Keyboard.Key;
 
     constructor() {
         super('MainStageScene');
@@ -112,13 +114,18 @@ export class MainStageScene extends Phaser.Scene {
         // Initialize Managers
         this.soundManager = new SoundManager(this);
         this.uiManager = new UIManager(this, this.soundManager);
-        this.uiManager.createHUD(() => {
-            if (this.isGamePaused) {
-                this.resumeGame();
-            } else {
-                this.pauseGame();
+        this.uiManager.createHUD(
+            () => {
+                if (this.isGamePaused) {
+                    this.resumeGame();
+                } else {
+                    this.pauseGame();
+                }
+            },
+            () => {
+                this.restartFullRun();
             }
-        });
+        );
 
         this.player = new Player(this, spawnX, spawnY, this.soundManager);
         this.player.spawnX = spawnX; this.player.spawnY = spawnY;
@@ -162,7 +169,7 @@ export class MainStageScene extends Phaser.Scene {
             this.player.bullets.clear(true, true);
         });
 
-        // ESC Key listener for Pause Menu
+        // ESC, R, and C Key listeners
         if (this.input.keyboard) {
             this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
             this.escKey.on('down', () => {
@@ -170,6 +177,41 @@ export class MainStageScene extends Phaser.Scene {
                     this.resumeGame();
                 } else {
                     this.pauseGame();
+                }
+            });
+
+            this.rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+            this.rKey.on('down', () => {
+                const now = Date.now();
+                if (now - this.lastRPressTime <= 650) {
+                    this.lastRPressTime = 0;
+                    this.restartFullRun();
+                } else {
+                    this.lastRPressTime = now;
+                    this.uiManager.showFloatingText(
+                        this.player.x, 
+                        this.player.y - 25, 
+                        'PRESS [R] AGAIN TO RESTART', 
+                        '#F87171', 
+                        800, 
+                        25
+                    );
+                }
+            });
+
+            this.cKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+            this.cKey.on('down', () => {
+                if (this.envManager.hasActiveCheckpoint()) {
+                    this.respawnAtActiveCheckpoint();
+                } else {
+                    this.uiManager.showFloatingText(
+                        this.player.x, 
+                        this.player.y - 25, 
+                        'NO CHECKPOINT ACTIVE', 
+                        '#94A3B8', 
+                        800, 
+                        25
+                    );
                 }
             });
         }
@@ -270,7 +312,11 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     private respawnAtActiveCheckpoint() {
-        this.resumeGame();
+        if (this.isGamePaused) {
+            this.resumeGame();
+        }
+        this.uiManager.hideDeathScreen();
+        this.uiManager.hidePauseMenu();
         this.totalDeaths++;
         this.player.setPosition(this.player.activeSpawnX, this.player.activeSpawnY);
         this.player.setVelocity(0, 0);
@@ -288,7 +334,11 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     private restartFullRun() {
-        this.resumeGame();
+        if (this.isGamePaused) {
+            this.resumeGame();
+        }
+        this.uiManager.hideDeathScreen();
+        this.uiManager.hidePauseMenu();
         this.totalDeaths = 0;
         this.startTime = this.time.now;
         this.totalPausedTime = 0;

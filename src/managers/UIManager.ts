@@ -179,7 +179,7 @@ export class UIManager {
         }
     };
 
-    createHUD(onPauseToggle?: () => void) {
+    createHUD(onPauseToggle?: () => void, onRestartRun?: () => void) {
         this.hudText = this.scene.add.text(16, 16, '', { 
             fontSize: '15px', 
             fontFamily: 'Arial', 
@@ -189,9 +189,38 @@ export class UIManager {
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(15);
 
+        // Top Right [R+R] Restart Run Button
+        const restartBtnContainer = this.scene.add.container(1088, 24).setScrollFactor(0).setDepth(15);
+        const restartBtnBg = this.scene.add.rectangle(0, 0, 132, 28, 0x0f172a, 0.85)
+            .setStrokeStyle(1.5, 0xf87171, 0.8)
+            .setInteractive({ useHandCursor: true });
+        
+        const restartBtnText = this.scene.add.text(0, 0, '[R+R] Restart Run', {
+            fontSize: '12px', fontFamily: 'Arial', color: '#f87171', fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        restartBtnBg.on('pointerover', () => {
+            restartBtnBg.setFillStyle(0xb91c1c, 0.95);
+            restartBtnBg.setStrokeStyle(1.5, 0xfca5a5);
+            restartBtnText.setColor('#ffffff');
+        });
+
+        restartBtnBg.on('pointerout', () => {
+            restartBtnBg.setFillStyle(0x0f172a, 0.85);
+            restartBtnBg.setStrokeStyle(1.5, 0xf87171, 0.8);
+            restartBtnText.setColor('#f87171');
+        });
+
+        restartBtnBg.on('pointerdown', () => {
+            this.soundManager?.playMenuSelect();
+            if (onRestartRun) onRestartRun();
+        });
+
+        restartBtnContainer.add([restartBtnBg, restartBtnText]);
+
         // Top Right [ESC] Menu Button
-        const menuBtnContainer = this.scene.add.container(1280 - 75, 24).setScrollFactor(0).setDepth(15);
-        const btnBg = this.scene.add.rectangle(0, 0, 114, 28, 0x0f172a, 0.85)
+        const menuBtnContainer = this.scene.add.container(1214, 24).setScrollFactor(0).setDepth(15);
+        const btnBg = this.scene.add.rectangle(0, 0, 100, 28, 0x0f172a, 0.85)
             .setStrokeStyle(1.5, 0x38bdf8, 0.8)
             .setInteractive({ useHandCursor: true });
         
