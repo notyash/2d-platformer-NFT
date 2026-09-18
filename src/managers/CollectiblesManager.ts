@@ -74,7 +74,7 @@ export class CollectiblesManager {
             this.soundManager?.playCoin();
         });
 
-        this.gunSprites = this.createGroup('GunPowerup', 'gun-powerup', 'gun-anim', (g) => {
+        this.gunSprites = this.createGroup('GunPowerup', 'gun-powerup', '', (g) => {
             this.uiManager.showFloatingText(g.x, g.y - 10, '+1 BLASTER [SLOT 1]', '#00FFFF');
             this.uiManager.spawnParticles(g.x, g.y, 0x00FFFF);
             this.scene.cameras.main.shake(150, 0.006);
@@ -82,7 +82,7 @@ export class CollectiblesManager {
             this.soundManager?.playPowerup();
         });
 
-        this.totemSprites = this.createGroup('Totem', 'totem', 'totem-anim', (t) => {
+        this.totemSprites = this.createGroup('Totem', 'totem', '', (t) => {
             this.uiManager.showFloatingText(t.x, t.y - 10, '+1 SHIELD [SLOT 2]', '#FFD700');
             this.uiManager.spawnParticles(t.x, t.y, 0xFFD700);
             this.scene.cameras.main.shake(150, 0.006); 
@@ -115,7 +115,7 @@ export class CollectiblesManager {
             }
 
             this.scene.physics.add.existing(obj, true);
-            obj.setDepth(4);
+            obj.setDepth(2.8);
             obj.setData('uniqueKey', uniqueKey);
             if (anim && this.scene.anims.exists(anim)) {
                 obj.play(anim);

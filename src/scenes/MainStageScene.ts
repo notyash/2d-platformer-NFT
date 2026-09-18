@@ -52,9 +52,9 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('plain-ground', 'assets/tilesets/plainGround.png');
 
         this.load.image('moving-platform-img', 'assets/sprites/moving-platform.png');
-        this.load.image('pipe-monster', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
+        this.load.spritesheet('pipe-monster', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
         this.load.image('jump-pad-img', 'assets/sprites/jump-pad.png');
-        this.load.spritesheet('coin', 'assets/sprites/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
+        this.load.spritesheet('coin', 'assets/sprites/collectibles/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
         
         // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
@@ -72,16 +72,18 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('mob-pumpkin-bat', 'assets/sprites/monsters/Pumpkin Bat.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('mob-sandal-l', 'assets/sprites/monsters/Sandal-Mob-L.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('mob-sandal-r', 'assets/sprites/monsters/Sandal-Mob-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-lava-kappa', 'assets/sprites/monsters/Lava Kappa.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.image('mob-shiro-onna', 'assets/sprites/monsters/Shiro Onna.png');
 
-        const totemSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23B8860B" stroke-width="2"><polygon fill="%23FFD700" points="12,2 22,12 12,22 2,12"/><polygon fill="%23FFEA00" points="36,4 42,12 36,20 30,12"/><polygon fill="%23FFFF00" points="60,6 62,12 60,18 58,12"/><polygon fill="%23FFEA00" points="84,4 90,12 84,20 78,12"/></g></svg>`;
-        const gunSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23008B8B" stroke-width="2"><rect fill="%2300FFFF" x="4" y="6" width="16" height="12" rx="4"/><rect fill="%23E0FFFF" x="28" y="8" width="16" height="8" rx="2"/><rect fill="%23FFFFFF" x="52" y="10" width="16" height="4" rx="1"/><rect fill="%23E0FFFF" x="76" y="8" width="16" height="8" rx="2"/></g></svg>`;
+        // Collectibles (Totem & Gun)
+        this.load.image('totem', 'assets/sprites/collectibles/frog doll totem.png');
+        this.load.image('gun-powerup', 'assets/sprites/collectibles/gun sprite.png');
+
         const particleSvg = `data:image/svg+xml;charset=utf8,<svg width="8" height="8" xmlns="http://www.w3.org/2000/svg"><circle cx="4" cy="4" r="4" fill="%23FFFFFF"/></svg>`;
         const fireballSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23FF4500"/><circle cx="8" cy="8" r="5" fill="%23FF8C00"/><circle cx="8" cy="8" r="3" fill="%23FFFF00"/></svg>`;
         const enemyBulletSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23DC2626"/><circle cx="8" cy="8" r="5" fill="%23F87171"/><circle cx="8" cy="8" r="2.5" fill="%23FFFFFF"/></svg>`;
         const windParticleSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="6" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="1" width="16" height="4" rx="2" fill="%23BAE6FD"/></svg>`;
 
-        this.load.spritesheet('totem', totemSvg, { frameWidth: 24, frameHeight: 24 });
-        this.load.spritesheet('gun-powerup', gunSvg, { frameWidth: 24, frameHeight: 24 });
         this.load.image('particle', particleSvg);
         this.load.image('fireball', fireballSvg);
         this.load.image('enemy-bullet', enemyBulletSvg);
@@ -106,6 +108,19 @@ export class MainStageScene extends Phaser.Scene {
         const map = this.make.tilemap({ key: 'stage1' });
         this.createLayers(map);
         this.createAnimations();
+
+        // Enforce clean nearest-neighbor pixel sampling on mob textures to prevent edge bleeding
+        const mobTextureKeys = [
+            'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster',
+            'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
+            'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
+            'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin'
+        ];
+        mobTextureKeys.forEach(key => {
+            if (this.textures.exists(key)) {
+                this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+            }
+        });
 
         const rawMapObjects = map.getObjectLayer('Objects')?.objects || [];
         
@@ -442,8 +457,6 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-r-anim', frames: this.anims.generateFrameNumbers('walk-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'walk-l-anim', frames: this.anims.generateFrameNumbers('walk-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'totem-anim', frames: this.anims.generateFrameNumbers('totem', { start: 0, end: 3 }), frameRate: 8, yoyo: true, repeat: -1 });
-        this.anims.create({ key: 'gun-anim', frames: this.anims.generateFrameNumbers('gun-powerup', { start: 0, end: 3 }), frameRate: 12, yoyo: true, repeat: -1 });
         
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });
@@ -479,6 +492,15 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'mob-sandal-walk-r', frames: this.anims.generateFrameNumbers('mob-sandal-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'mob-sandal-mob-walk-l', frames: this.anims.generateFrameNumbers('mob-sandal-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'mob-sandal-mob-walk-r', frames: this.anims.generateFrameNumbers('mob-sandal-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+
+        // Lava Kappa: 8 frames total - 0..3 Left walk, 4..7 Right walk
+        this.anims.create({ key: 'mob-lava-kappa-walk-l', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-lava-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-kappa-walk-l', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
+
+        // Pipe Monster (Devil)
+        this.anims.create({ key: 'pipe-monster-anim', frames: this.anims.generateFrameNumbers('pipe-monster', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
     }
 
     update() {

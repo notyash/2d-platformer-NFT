@@ -76,7 +76,7 @@ export class InventoryManager {
         const gunBg = this.scene.add.rectangle(0, 0, badgeWidth, badgeHeight, 0x0f172a, 0.85)
             .setStrokeStyle(1.5, 0x00FFFF, 0.9)
             .setOrigin(0.5);
-        const gunIcon = this.scene.add.sprite(-badgeWidth / 2 + 18, 0, 'gun-powerup', 0)
+        const gunIcon = this.scene.add.image(-badgeWidth / 2 + 18, 0, 'gun-powerup')
             .setDisplaySize(20, 20);
         this.gunText = this.scene.add.text(-badgeWidth / 2 + 34, 0, '[L-Click / Ctrl] Shoot', {
             fontSize: '11px', fontFamily: 'Arial', color: '#00FFFF', fontStyle: 'bold'
@@ -90,7 +90,7 @@ export class InventoryManager {
         const totemBg = this.scene.add.rectangle(0, 0, badgeWidth, badgeHeight, 0x0f172a, 0.85)
             .setStrokeStyle(1.5, 0xFFD700, 0.9)
             .setOrigin(0.5);
-        const totemIcon = this.scene.add.sprite(-badgeWidth / 2 + 18, 0, 'totem', 0)
+        const totemIcon = this.scene.add.image(-badgeWidth / 2 + 18, 0, 'totem')
             .setDisplaySize(20, 20);
         this.totemText = this.scene.add.text(-badgeWidth / 2 + 34, 0, '[E] Activate Totem', {
             fontSize: '11px', fontFamily: 'Arial', color: '#FFD700', fontStyle: 'bold'
