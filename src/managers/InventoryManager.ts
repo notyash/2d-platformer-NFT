@@ -145,14 +145,7 @@ export class InventoryManager {
 
     private updatePlayerTint() {
         if (this.player.isInvincible) return;
-
-        if (this.player.hasTotem) {
-            this.player.setTint(0xffd700);
-        } else if (this.player.hasGun) {
-            this.player.setTint(0x00ffff);
-        } else {
-            this.player.clearTint();
-        }
+        this.player.clearTint();
     }
 
     public update() {

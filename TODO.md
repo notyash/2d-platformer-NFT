@@ -34,12 +34,16 @@
 - [x] **Dual Controls (WASD & Arrow Keys)**: Full movement and jump support using both `WASD` and `Arrow Keys`.
 - [x] **Interactive `ESC` Pause Menu**: Keyboard and mouse navigation with Resume, Restart Run, and Sound Toggle.
 - [x] **Accidental Reload Guard**: `beforeunload` browser protection against accidental speedrun loss.
+- [x] **Air / Flying Mobs (`FlyingMob`)**: Configurable aerial patrol hazards with tile-based `distance` (1 = 1 tile / 32px), `axis` (`horizontal` / `vertical`), directional flight animations, stomping, blaster elimination, and optional shooting.
 - [x] **Retro 8-Bit SFX Engine**: Native WebAudio synthesis for Jump, Shoot, Enemy Shoot, Coin, Powerup, Stomp, Death, and UI clicks.
 
 ---
 
-### ? Immediate & Near-Term
-- [ ] **Air / Flying Mobs**: Add aerial swooping / hovering patrol hazards.
+### ⏳ Immediate & Near-Term
+- [ ] **Configurable Difficulty Modes (Easy / Medium / Hardcore)**:
+  - **Easy**: More frequent checkpoints, relaxed hazard intervals, and forgiving mob reaction times.
+  - **Medium**: Standard checkpoint distribution and default gameplay balancing.
+  - **Hardcore**: Zero checkpoints (full run reset to start on death), faster projectile/mob attack speeds, and stricter platforming windows.
 - [ ] **Stage Clear / Victory Trigger**: Add an end-of-stage goal portal / artifact that stops the speedrun timer and shows a victory summary screen.
 - [ ] **Mini-Boss Encounter**: Add an end-of-stage mini-boss challenge before the final exit.
 

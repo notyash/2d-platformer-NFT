@@ -39,6 +39,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public bullets: Phaser.Physics.Arcade.Group;
     public soundManager?: SoundManager;
 
+    public shootRecoilUntil: number = 0;
     private lastMouseDown: boolean = false;
     private lastCtrlDown: boolean = false;
 
@@ -169,6 +170,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     private shootBullet() {
         const isRight = this.facing === 'right';
+        this.shootRecoilUntil = this.scene.time.now + 160;
         const spawnX = isRight ? this.x + 12 : this.x - 12;
         const spawnY = this.y - 2;
 
@@ -202,21 +204,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     private updateAnimationState(isGrounded: boolean) {
         const body = this.body as Phaser.Physics.Arcade.Body;
         const isMovingHorizontally = body.velocity.x !== 0;
+        const isShootingRecoil = this.scene.time.now < this.shootRecoilUntil;
+
+        // When shooting recoil is active, display muzzle flash frame
+        if (isShootingRecoil) {
+            const shootFrame = this.facing === 'right' ? 2 : 1;
+            if (this.anims.isPlaying) this.anims.stop();
+            if (this.texture.key !== 'player-shoot' || this.frame.name !== String(shootFrame)) {
+                this.setTexture('player-shoot', shootFrame);
+            }
+            return;
+        }
 
         if (!isGrounded) {
-            const key = body.velocity.y < 0 ? (this.facing === 'right' ? 'jump-r' : 'jump-l') : (this.facing === 'right' ? 'fall-r' : 'fall-l');
             if (this.anims.isPlaying) this.anims.stop();
-            if (this.texture.key !== key) this.setTexture(key);
+            if (body.velocity.y < 0) {
+                // Jumping / Rising (Frame 1: Left Jump, Frame 2: Right Jump)
+                const frame = this.facing === 'right' ? 2 : 1;
+                if (this.texture.key !== 'player-jump-fall' || this.frame.name !== String(frame)) {
+                    this.setTexture('player-jump-fall', frame);
+                }
+            } else {
+                // Falling / Descending (Frame 0: Left Fall, Frame 3: Right Fall)
+                const frame = this.facing === 'right' ? 3 : 0;
+                if (this.texture.key !== 'player-jump-fall' || this.frame.name !== String(frame)) {
+                    this.setTexture('player-jump-fall', frame);
+                }
+            }
             return;
         }
         
         if (isMovingHorizontally) {
             const key = this.facing === 'right' ? 'walk-r-anim' : 'walk-l-anim';
-            if (this.anims.currentAnim?.key !== key) this.anims.play(key, true);
+            if (!this.anims.isPlaying || this.anims.currentAnim?.key !== key) {
+                this.anims.play(key, true);
+            }
         } else {
-            const key = this.facing === 'right' ? 'idle-r' : 'idle-l';
-            if (this.anims.isPlaying) this.anims.stop();
-            if (this.texture.key !== key) this.setTexture(key);
+            if (this.hasGun) {
+                const gunHoldFrame = this.facing === 'right' ? 3 : 0;
+                if (this.anims.isPlaying) this.anims.stop();
+                if (this.texture.key !== 'player-shoot' || this.frame.name !== String(gunHoldFrame)) {
+                    this.setTexture('player-shoot', gunHoldFrame);
+                }
+            } else {
+                const idleAnimKey = this.facing === 'right' ? 'idle-r-anim' : 'idle-l-anim';
+                if (this.scene.anims.exists(idleAnimKey)) {
+                    if (!this.anims.isPlaying || this.anims.currentAnim?.key !== idleAnimKey) {
+                        this.anims.play(idleAnimKey, true);
+                    }
+                } else {
+                    const key = this.facing === 'right' ? 'idle-r' : 'idle-l';
+                    if (this.anims.isPlaying) this.anims.stop();
+                    if (this.texture.key !== key) this.setTexture(key);
+                }
+            }
         }
     }
 
@@ -234,8 +275,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.enforceKeyLift();
             this.scene.time.delayedCall(2000, () => {
                 this.isInvincible = false;
-                if (this.hasGun) this.setTint(0x00ffff); 
-                else this.clearTint();
+                this.clearTint();
             });
             return;
         }
@@ -243,8 +283,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         // Full Death: Respawn at active checkpoint & reset stage
         this.setPosition(this.activeSpawnX, this.activeSpawnY); 
         this.setVelocity(0, 0);
-        this.anims.stop(); 
-        this.setTexture(this.facing === 'right' ? 'idle-r' : 'idle-l');
+        const idleAnimKey = this.facing === 'right' ? 'idle-r-anim' : 'idle-l-anim';
+        if (this.scene.anims.exists(idleAnimKey)) {
+            this.anims.play(idleAnimKey, true);
+        } else {
+            this.anims.stop(); 
+            this.setTexture(this.facing === 'right' ? 'idle-r' : 'idle-l');
+        }
         this.hasGun = false; 
         this.clearTint();
         this.soundManager?.playDeath();

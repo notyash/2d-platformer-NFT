@@ -13,6 +13,7 @@ export class EnemyManager {
     private soundManager?: SoundManager;
 
     public groundMobs!: Phaser.Physics.Arcade.Group;
+    public flyingMobs!: Phaser.Physics.Arcade.Group;
     public pipeMonsters!: Phaser.Physics.Arcade.Group;
     public enemyBullets!: Phaser.Physics.Arcade.Group;
     public ignoreLOSZones: Phaser.Geom.Rectangle[] = [];
@@ -43,6 +44,7 @@ export class EnemyManager {
         this.soundManager = soundManager;
 
         this.groundMobs = this.scene.physics.add.group();
+        this.flyingMobs = this.scene.physics.add.group({ allowGravity: false });
         this.pipeMonsters = this.scene.physics.add.group({ allowGravity: false, immovable: true });
         this.enemyBullets = this.scene.physics.add.group({ allowGravity: false });
     }
@@ -58,6 +60,7 @@ export class EnemyManager {
         this.clearBullets();
         if (this.rawMapObjects.length > 0 && this.groundLayer && this.oneWayLayer) {
             this.spawnGroundMobs();
+            this.spawnFlyingMobs();
             if (this.map) {
                 this.spawnPipeMonsters();
             }
@@ -91,11 +94,18 @@ export class EnemyManager {
             return mBody.velocity.y > 0 && mBody.bottom <= t.pixelY + 10;
         });
 
-        // Player vs Mobs overlap (instant stomp detection & fatal side hits)
+        // Player vs Ground Mobs overlap (instant stomp detection & fatal side hits)
         this.scene.physics.add.overlap(this.player, this.groundMobs, this.handlePlayerMobCollision);
 
-        // Player Bullets vs Mobs overlap (kill mob with blaster)
+        // Player vs Flying Mobs overlap (flying mobs cannot be stomped, only shot)
+        this.scene.physics.add.overlap(this.player, this.flyingMobs, this.handlePlayerFlyingMobCollision);
+
+        // Player Bullets vs Ground Mobs & Flying Mobs overlap (kill mob with blaster)
         this.scene.physics.add.overlap(this.player.bullets, this.groundMobs, (bulletObj, mobObj) => {
+            bulletObj.destroy();
+            this.killMob(mobObj as Phaser.Physics.Arcade.Sprite, 'shoot');
+        });
+        this.scene.physics.add.overlap(this.player.bullets, this.flyingMobs, (bulletObj, mobObj) => {
             bulletObj.destroy();
             this.killMob(mobObj as Phaser.Physics.Arcade.Sprite, 'shoot');
         });
@@ -143,20 +153,62 @@ export class EnemyManager {
         );
 
         this.spawnGroundMobs();
+        this.spawnFlyingMobs();
         this.saveCheckpointSnapshot();
+    }
+
+    private normalizeMobType(rawType: string): string {
+        const s = rawType.toLowerCase().trim().replace(/[\s_-]+/g, '-');
+        if (s.includes('sandal')) return 'sandal';
+        if (s.includes('bat') || s.includes('pumpkin')) return 'pumpkin-bat';
+        if (s.includes('bonsai') || s.includes('gripper')) return 'bonsai-gripper';
+        if (s.includes('yellow')) return 'bug-yellow';
+        if (s.includes('devil') || s.includes('red')) return 'devil';
+        if (s.includes('hedgehog') || s.includes('purple')) return 'hedgehog';
+        if (s.includes('green') || s.includes('bug')) return 'bug-green';
+        return s;
+    }
+
+    private getMobTextureAndFrame(mobType: string, dir: number): { key: string; frame: number } {
+        if (mobType === 'pumpkin-bat' || mobType === 'bat') {
+            return { key: 'mob-pumpkin-bat', frame: dir === 1 ? 3 : 0 };
+        }
+        if (mobType === 'bonsai-gripper' || mobType === 'gripper') {
+            return { key: 'mob-bonsai-gripper', frame: 0 };
+        }
+        if (mobType === 'sandal' || mobType === 'sandal-mob') {
+            return { key: dir === 1 ? 'mob-sandal-r' : 'mob-sandal-l', frame: 0 };
+        }
+        return { key: dir === 1 ? `mob-${mobType}-r` : `mob-${mobType}-l`, frame: 0 };
+    }
+
+    private getMobAnimKey(mobType: string, dir: number): string {
+        return dir === 1 ? `mob-${mobType}-walk-r` : `mob-${mobType}-walk-l`;
     }
 
     private spawnGroundMobs() {
         this.groundMobs.clear(true, true);
         this.enemyBullets.clear(true, true);
 
-        const mobObjects = this.rawMapObjects.filter((o: any) => 
-            o.name === 'GroundMob' || 
-            o.name === 'Mob' || 
-            o.name === 'Enemy' || 
-            o.name === 'ShooterMob' ||
-            o.name === 'ShootingMob'
-        );
+        const mobObjects = this.rawMapObjects.filter((o: any) => {
+            const isGroundName = (
+                o.name === 'GroundMob' || 
+                o.name === 'Mob' || 
+                o.name === 'Enemy' || 
+                o.name === 'ShooterMob' ||
+                o.name === 'ShootingMob'
+            );
+            if (!isGroundName) return false;
+            if (o.properties) {
+                const flyProp = o.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'flying' || 
+                    p.name.toLowerCase() === 'isflying' || 
+                    p.name.toLowerCase() === 'air'
+                ));
+                if (flyProp && Boolean(flyProp.value)) return false;
+            }
+            return true;
+        });
 
         mobObjects.forEach((obj: any) => {
             const uniqueKey = `${obj.name}_${Math.round(obj.x)}_${Math.round(obj.y)}`;
@@ -167,6 +219,10 @@ export class EnemyManager {
             }
 
             let mobType = 'bug-green';
+            if (obj.type && typeof obj.type === 'string' && obj.type.trim() !== '') {
+                mobType = obj.type.trim();
+            }
+
             let mobSpeed = 60;
             let isStationary = false;
             let canShoot = obj.name === 'ShooterMob' || obj.name === 'ShootingMob';
@@ -178,9 +234,14 @@ export class EnemyManager {
             let range = 380;
 
             if (obj.properties) {
-                const typeProp = obj.properties.find((p: any) => p.name && (p.name.toLowerCase() === 'type' || p.name.toLowerCase() === 'mobtype'));
+                const typeProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'type' || 
+                    p.name.toLowerCase() === 'mobtype' ||
+                    p.name.toLowerCase() === 'mob_type' ||
+                    p.name.toLowerCase() === 'monster'
+                ));
                 if (typeProp && typeProp.value) {
-                    mobType = String(typeProp.value).toLowerCase().trim();
+                    mobType = String(typeProp.value).trim();
                 }
 
                 const speedProp = obj.properties.find((p: any) => p.name && p.name.toLowerCase() === 'speed');
@@ -278,15 +339,22 @@ export class EnemyManager {
                 }
             }
 
-            const initialAnim = initialDir === 1 ? `mob-${mobType}-walk-r` : `mob-${mobType}-walk-l`;
-            const initialTexture = initialDir === 1 ? `mob-${mobType}-r` : `mob-${mobType}-l`;
+            const normalizedType = this.normalizeMobType(mobType);
+            const texInfo = this.getMobTextureAndFrame(normalizedType, initialDir);
+            const initialAnim = this.getMobAnimKey(normalizedType, initialDir);
 
-            const mob = this.groundMobs.create(spawnX, spawnY, initialTexture) as Phaser.Physics.Arcade.Sprite;
+            const mob = this.groundMobs.create(spawnX, spawnY, texInfo.key, texInfo.frame) as Phaser.Physics.Arcade.Sprite;
             mob.setDepth(4).setOrigin(0.5, 1); 
             
+            const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper';
             const body = mob.body as Phaser.Physics.Arcade.Body;
-            body.setSize(24, 24);
-            body.setOffset(9, 6);
+            if (is32x32) {
+                body.setSize(22, 22);
+                body.setOffset(5, 10);
+            } else {
+                body.setSize(24, 24);
+                body.setOffset(9, 6);
+            }
             body.setCollideWorldBounds(true);
             
             if (!isStationary && this.scene.anims.exists(initialAnim)) {
@@ -297,7 +365,256 @@ export class EnemyManager {
             mob.setData('direction', initialDir);
             mob.setData('speed', mobSpeed); 
             mob.setData('stationary', isStationary);
-            mob.setData('type', mobType); 
+            mob.setData('type', normalizedType); 
+            mob.setData('canShoot', canShoot);
+            mob.setData('ignoreLOS', ignoreLOS);
+            mob.setData('shootInterval', shootInterval);
+            mob.setData('initialDelay', initialDelay);
+            mob.setData('lastShootTime', this.scene.time.now - shootInterval + initialDelay);
+            mob.setData('bulletSpeed', bulletSpeed);
+            mob.setData('maxBulletSpeed', maxBulletSpeed);
+            mob.setData('range', range);
+
+            if (canShoot) {
+                mob.setTint(0xff9999);
+            }
+        });
+    }
+
+    private spawnFlyingMobs() {
+        this.flyingMobs.clear(true, true);
+
+        const flyingMobObjects = this.rawMapObjects.filter((o: any) => {
+            const isFlyName = (
+                o.name === 'FlyingMob' || 
+                o.name === 'Flying_Mob' || 
+                o.name === 'FlyMob' || 
+                o.name === 'AirMob' || 
+                o.name === 'FlyingEnemy' || 
+                o.name === 'BatMob'
+            );
+            if (isFlyName) return true;
+            if ((o.name === 'GroundMob' || o.name === 'Mob' || o.name === 'Enemy') && o.properties) {
+                const flyProp = o.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'flying' || 
+                    p.name.toLowerCase() === 'isflying' || 
+                    p.name.toLowerCase() === 'air'
+                ));
+                if (flyProp && Boolean(flyProp.value)) return true;
+            }
+            return false;
+        });
+
+        flyingMobObjects.forEach((obj: any) => {
+            const uniqueKey = `${obj.name}_${Math.round(obj.x)}_${Math.round(obj.y)}`;
+
+            // Skip flying mobs that were killed BEFORE the active checkpoint
+            if (this.killedEnemyKeys.has(uniqueKey)) {
+                return;
+            }
+
+            let mobType = 'pumpkin-bat';
+            if (obj.type && typeof obj.type === 'string' && obj.type.trim() !== '') {
+                mobType = obj.type.trim();
+            }
+
+            let distanceInTiles = 4;
+            let speed = 70;
+            let axis: 'horizontal' | 'vertical' = 'horizontal';
+            let initialDir = 1;
+            let canShoot = false;
+            let ignoreLOS = false;
+            let shootInterval = 2200;
+            let initialDelay = 300;
+            let bulletSpeed = 220;
+            let maxBulletSpeed = 220;
+            let range = 380;
+
+            if (obj.properties) {
+                const typeProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'type' || 
+                    p.name.toLowerCase() === 'mobtype' ||
+                    p.name.toLowerCase() === 'mob_type' ||
+                    p.name.toLowerCase() === 'monster'
+                ));
+                if (typeProp && typeProp.value) {
+                    mobType = String(typeProp.value).trim();
+                }
+
+                const distProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'distance' || 
+                    p.name.toLowerCase() === 'tiles' || 
+                    p.name.toLowerCase() === 'range_tiles' ||
+                    p.name.toLowerCase() === 'dist'
+                ));
+                if (distProp && distProp.value !== undefined) {
+                    distanceInTiles = Number(distProp.value);
+                }
+
+                const speedProp = obj.properties.find((p: any) => p.name && p.name.toLowerCase() === 'speed');
+                if (speedProp && speedProp.value !== undefined) {
+                    speed = Number(speedProp.value);
+                }
+
+                const axisProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'axis' || 
+                    p.name.toLowerCase() === 'direction_axis'
+                ));
+                if (axisProp && axisProp.value !== undefined) {
+                    const aVal = String(axisProp.value).toLowerCase().trim();
+                    if (aVal === 'vertical' || aVal === 'y' || aVal === 'v') axis = 'vertical';
+                    else axis = 'horizontal';
+                }
+
+                const dirProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'direction' || 
+                    p.name.toLowerCase() === 'dir' ||
+                    p.name.toLowerCase() === 'heading' ||
+                    p.name.toLowerCase() === 'flydirection'
+                ));
+                if (dirProp && dirProp.value !== undefined) {
+                    const val = String(dirProp.value).toLowerCase().trim();
+                    if (val === 'left' || val === 'l' || val === '-1') {
+                        initialDir = -1;
+                        axis = 'horizontal';
+                    } else if (val === 'right' || val === 'r' || val === '1') {
+                        initialDir = 1;
+                        axis = 'horizontal';
+                    } else if (val === 'up' || val === 'u' || val === 'top') {
+                        initialDir = -1;
+                        axis = 'vertical';
+                    } else if (val === 'down' || val === 'd' || val === 'bottom') {
+                        initialDir = 1;
+                        axis = 'vertical';
+                    }
+                }
+
+                const shootProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'canshoot' || 
+                    p.name.toLowerCase() === 'shoots'
+                ));
+                if (shootProp && shootProp.value !== undefined) {
+                    canShoot = Boolean(shootProp.value);
+                }
+
+                const losProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'ignorelos' || 
+                    p.name.toLowerCase() === 'ignorewalls' || 
+                    p.name.toLowerCase() === 'wallhack'
+                ));
+                if (losProp && losProp.value !== undefined) {
+                    ignoreLOS = Boolean(losProp.value);
+                }
+
+                const intervalProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'shootinterval' || 
+                    p.name.toLowerCase() === 'interval' ||
+                    p.name.toLowerCase() === 'cooldown' ||
+                    p.name.toLowerCase() === 'rate'
+                ));
+                if (intervalProp && intervalProp.value !== undefined) {
+                    shootInterval = Number(intervalProp.value);
+                }
+
+                const delayProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'initialdelay' || 
+                    p.name.toLowerCase() === 'delay' ||
+                    p.name.toLowerCase() === 'firstshotdelay' ||
+                    p.name.toLowerCase() === 'warmup'
+                ));
+                if (delayProp && delayProp.value !== undefined) {
+                    initialDelay = Number(delayProp.value);
+                }
+
+                const bulletSpeedProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'bulletspeed' ||
+                    p.name.toLowerCase() === 'minspeed'
+                ));
+                if (bulletSpeedProp && bulletSpeedProp.value !== undefined) {
+                    bulletSpeed = Number(bulletSpeedProp.value);
+                    maxBulletSpeed = bulletSpeed;
+                }
+
+                const maxBulletSpeedProp = obj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'maxbulletspeed' ||
+                    p.name.toLowerCase() === 'maxspeed' ||
+                    p.name.toLowerCase() === 'fastspeed'
+                ));
+                if (maxBulletSpeedProp && maxBulletSpeedProp.value !== undefined) {
+                    maxBulletSpeed = Number(maxBulletSpeedProp.value);
+                }
+
+                const rangeProp = obj.properties.find((p: any) => p.name && (p.name.toLowerCase() === 'range'));
+                if (rangeProp && rangeProp.value !== undefined) {
+                    range = Number(rangeProp.value);
+                }
+            }
+
+            let spawnX = 0, spawnY = 0;
+            if (obj.width && obj.height) {
+                spawnX = obj.x + ((obj.width || 0) / 2);
+                spawnY = obj.y + (obj.height || 0);
+            } else {
+                spawnX = obj.x;
+                spawnY = obj.y;
+            }
+
+            const normalizedType = this.normalizeMobType(mobType);
+            const texInfo = this.getMobTextureAndFrame(normalizedType, initialDir);
+            const initialAnim = this.getMobAnimKey(normalizedType, initialDir);
+
+            const mob = this.flyingMobs.create(spawnX, spawnY, texInfo.key, texInfo.frame) as Phaser.Physics.Arcade.Sprite;
+            mob.setDepth(4).setOrigin(0.5, 1);
+
+            const body = mob.body as Phaser.Physics.Arcade.Body;
+            body.allowGravity = false;
+
+            const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper';
+            if (is32x32) {
+                body.setSize(22, 22);
+                body.setOffset(5, 10);
+            } else {
+                body.setSize(24, 24);
+                body.setOffset(9, 6);
+            }
+
+            // 1 distance unit = 1 tile = 32 pixels starting strictly from object placed coordinates
+            const travelDistancePx = distanceInTiles * 32;
+            let minX = spawnX, maxX = spawnX, minY = spawnY, maxY = spawnY;
+
+            if (axis === 'horizontal') {
+                if (initialDir === 1) {
+                    minX = spawnX;
+                    maxX = spawnX + travelDistancePx;
+                } else {
+                    minX = spawnX - travelDistancePx;
+                    maxX = spawnX;
+                }
+                mob.setVelocityX(speed * initialDir);
+            } else {
+                if (initialDir === 1) {
+                    minY = spawnY;
+                    maxY = spawnY + travelDistancePx;
+                } else {
+                    minY = spawnY - travelDistancePx;
+                    maxY = spawnY;
+                }
+                mob.setVelocityY(speed * initialDir);
+            }
+
+            if (this.scene.anims.exists(initialAnim)) {
+                mob.play(initialAnim);
+            }
+
+            mob.setData('uniqueKey', uniqueKey);
+            mob.setData('direction', initialDir);
+            mob.setData('speed', speed);
+            mob.setData('axis', axis);
+            mob.setData('minX', minX);
+            mob.setData('maxX', maxX);
+            mob.setData('minY', minY);
+            mob.setData('maxY', maxY);
+            mob.setData('type', normalizedType);
             mob.setData('canShoot', canShoot);
             mob.setData('ignoreLOS', ignoreLOS);
             mob.setData('shootInterval', shootInterval);
@@ -421,6 +738,7 @@ export class EnemyManager {
         this.enemyBullets.clear(true, true);
         if (this.rawMapObjects.length > 0 && this.groundLayer && this.oneWayLayer) {
             this.spawnGroundMobs();
+            this.spawnFlyingMobs();
             if (this.map) {
                 this.spawnPipeMonsters();
             }
@@ -446,6 +764,12 @@ export class EnemyManager {
         }
     }
 
+    private handlePlayerFlyingMobCollision = (_playerObj: any, _mobObj: any) => {
+        const mob = _mobObj as Phaser.Physics.Arcade.Sprite;
+        if (!mob.active || !this.player.active) return;
+        this.player.die();
+    }
+
     private killMob(mob: Phaser.Physics.Arcade.Sprite, method: 'stomp' | 'shoot') {
         const uniqueKey = mob.getData('uniqueKey') as string;
         if (uniqueKey) {
@@ -453,6 +777,7 @@ export class EnemyManager {
         }
 
         this.groundMobs.remove(mob);
+        this.flyingMobs.remove(mob);
         const body = mob.body as Phaser.Physics.Arcade.Body;
         body.checkCollision.none = true;
         body.setCollideWorldBounds(false);
@@ -616,12 +941,12 @@ export class EnemyManager {
                     }
                 }
 
-                const texKey = dir === 1 ? `mob-${mobType}-r` : `mob-${mobType}-l`;
+                const texInfo = this.getMobTextureAndFrame(mobType, dir);
                 if (mob.anims.isPlaying) {
                     mob.anims.stop();
                 }
-                if (mob.texture.key !== texKey) {
-                    mob.setTexture(texKey);
+                if (mob.texture.key !== texInfo.key || (texInfo.frame !== undefined && mob.frame.name !== String(texInfo.frame))) {
+                    mob.setTexture(texInfo.key, texInfo.frame);
                 }
             } else {
                 if (body.blocked.left) {
@@ -642,8 +967,8 @@ export class EnemyManager {
                 mob.setData('direction', dir);
                 mob.setVelocityX(speed * dir);
 
-                const animKey = dir === 1 ? `mob-${mobType}-walk-r` : `mob-${mobType}-walk-l`;
-                if (mob.anims.currentAnim?.key !== animKey && this.scene.anims.exists(animKey)) {
+                const animKey = this.getMobAnimKey(mobType, dir);
+                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
                     mob.play(animKey, true);
                 }
             }
@@ -668,6 +993,92 @@ export class EnemyManager {
                         
                         const aimDir = this.player.x < mob.x ? -1 : 1;
                         mob.setData('direction', aimDir);
+
+                        this.scene.tweens.add({
+                            targets: mob,
+                            alpha: 0.4,
+                            duration: 80,
+                            yoyo: true,
+                            repeat: 1,
+                            onComplete: () => {
+                                if (mob.active) {
+                                    this.fireEnemyProjectile(mob, playerZone, ignoreLOS);
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        // Flying Mobs Patrol & Animation Update
+        this.flyingMobs.getChildren().forEach(child => {
+            const mob = child as Phaser.Physics.Arcade.Sprite;
+            if (!mob.active) return;
+
+            let dir = mob.getData('direction') as number;
+            const speed = (mob.getData('speed') as number) || 70;
+            const axis = (mob.getData('axis') as 'horizontal' | 'vertical') || 'horizontal';
+            const mobType = mob.getData('type') as string;
+            const canShoot = mob.getData('canShoot') as boolean;
+            const ignoreLOS = (mob.getData('ignoreLOS') as boolean) || false;
+
+            if (axis === 'horizontal') {
+                const minX = mob.getData('minX') as number;
+                const maxX = mob.getData('maxX') as number;
+
+                if (mob.x >= maxX) {
+                    dir = -1;
+                } else if (mob.x <= minX) {
+                    dir = 1;
+                }
+
+                mob.setData('direction', dir);
+                mob.setVelocityX(speed * dir);
+                mob.setVelocityY(0);
+
+                const animKey = this.getMobAnimKey(mobType, dir);
+                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                    mob.play(animKey, true);
+                }
+            } else {
+                const minY = mob.getData('minY') as number;
+                const maxY = mob.getData('maxY') as number;
+
+                if (mob.y >= maxY) {
+                    dir = -1;
+                } else if (mob.y <= minY) {
+                    dir = 1;
+                }
+
+                mob.setData('direction', dir);
+                mob.setVelocityY(speed * dir);
+                mob.setVelocityX(0);
+
+                const horizontalFacing = this.player.x < mob.x ? -1 : 1;
+                const animKey = this.getMobAnimKey(mobType, horizontalFacing);
+                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                    mob.play(animKey, true);
+                }
+            }
+
+            if (canShoot) {
+                const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
+                const range = (mob.getData('range') as number) || 380;
+                const shootInterval = (mob.getData('shootInterval') as number) || 2200;
+                const lastShootTime = (mob.getData('lastShootTime') as number) || 0;
+
+                if (distToPlayer <= range && currentTime > lastShootTime + shootInterval) {
+                    const eyeX = mob.x;
+                    const eyeY = mob.y - 14;
+                    const targetX = this.player.x;
+                    const targetY = this.player.y - 8;
+
+                    const playerZone = this.ignoreLOSZones.find(z => Phaser.Geom.Rectangle.Contains(z, this.player.x, this.player.y));
+                    const shouldBypassLOS = ignoreLOS || Boolean(playerZone);
+
+                    if (shouldBypassLOS || this.hasLineOfSight(eyeX, eyeY, targetX, targetY)) {
+                        mob.setData('lastShootTime', currentTime);
 
                         this.scene.tweens.add({
                             targets: mob,

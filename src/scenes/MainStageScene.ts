@@ -59,7 +59,7 @@ export class MainStageScene extends Phaser.Scene {
         // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
 
-        // Placeholder Mobs (Bug, Devil, Hedgehog) - 42x30 frames
+        // Mob Sprites (Bug, Devil, Hedgehog, Bonsai Gripper, Pumpkin Bat, Sandal)
         this.load.spritesheet('mob-bug-green-l', 'assets/sprites/monsters/Bug_42x30_Green_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
         this.load.spritesheet('mob-bug-green-r', 'assets/sprites/monsters/Bug_42x30_Green_Walk_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
         this.load.spritesheet('mob-bug-yellow-l', 'assets/sprites/monsters/Bug_42x30_Yellow_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
@@ -68,6 +68,10 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('mob-devil-r', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
         this.load.spritesheet('mob-hedgehog-l', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_L.png', { frameWidth: 42, frameHeight: 30 });
         this.load.spritesheet('mob-hedgehog-r', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_R.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.spritesheet('mob-bonsai-gripper', 'assets/sprites/monsters/Bonsai Gripper.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-pumpkin-bat', 'assets/sprites/monsters/Pumpkin Bat.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-sandal-l', 'assets/sprites/monsters/Sandal-Mob-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-sandal-r', 'assets/sprites/monsters/Sandal-Mob-R.png', { frameWidth: 32, frameHeight: 32 });
 
         const totemSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23B8860B" stroke-width="2"><polygon fill="%23FFD700" points="12,2 22,12 12,22 2,12"/><polygon fill="%23FFEA00" points="36,4 42,12 36,20 30,12"/><polygon fill="%23FFFF00" points="60,6 62,12 60,18 58,12"/><polygon fill="%23FFEA00" points="84,4 90,12 84,20 78,12"/></g></svg>`;
         const gunSvg = `data:image/svg+xml;charset=utf8,<svg width="96" height="24" xmlns="http://www.w3.org/2000/svg"><g stroke="%23008B8B" stroke-width="2"><rect fill="%2300FFFF" x="4" y="6" width="16" height="12" rx="4"/><rect fill="%23E0FFFF" x="28" y="8" width="16" height="8" rx="2"/><rect fill="%23FFFFFF" x="52" y="10" width="16" height="4" rx="1"/><rect fill="%23E0FFFF" x="76" y="8" width="16" height="8" rx="2"/></g></svg>`;
@@ -83,14 +87,19 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('enemy-bullet', enemyBulletSvg);
         this.load.image('wind-particle', windParticleSvg);
 
-        this.load.image('idle-r', 'assets/sprites/player/Melissa_Stand_R.png');
-        this.load.image('idle-l', 'assets/sprites/player/Melissa_Stand_L.png');
+        // Player Sprites
+        this.load.image('idle-r', 'assets/sprites/player/Main-Sprite-Standing-R.png');
+        this.load.image('idle-l', 'assets/sprites/player/Main-Sprite-Standing-L.png');
+        this.load.spritesheet('idle-wind-r', 'assets/sprites/player/Main-Sprite-Idle-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('idle-wind-l', 'assets/sprites/player/Main-Sprite-Idle-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-shoot', 'assets/sprites/player/Sprite-Shoot.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-jump-fall', 'assets/sprites/player/Main-Sprite-Jump-Fall.png', { frameWidth: 32, frameHeight: 32 });
         this.load.image('jump-r', 'assets/sprites/player/Melissa_Jump1_R.png');
         this.load.image('jump-l', 'assets/sprites/player/Melissa_Jump1_L.png');
         this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
         this.load.image('fall-l', 'assets/sprites/player/Melissa_Fall2_L.png');
-        this.load.spritesheet('walk-r', 'assets/sprites/player/Melissa_Walk_Anim_R.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('walk-l', 'assets/sprites/player/new_player.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('walk-r', 'assets/sprites/player/Main-Sprite-Walk-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('walk-l', 'assets/sprites/player/Main-Sprite-Walk-L.png', { frameWidth: 32, frameHeight: 32 });
     }
 
     create() {
@@ -320,8 +329,13 @@ export class MainStageScene extends Phaser.Scene {
         this.totalDeaths++;
         this.player.setPosition(this.player.activeSpawnX, this.player.activeSpawnY);
         this.player.setVelocity(0, 0);
-        this.player.anims.stop();
-        this.player.setTexture(this.player.facing === 'right' ? 'idle-r' : 'idle-l');
+        const idleKey = this.player.facing === 'right' ? 'idle-r-anim' : 'idle-l-anim';
+        if (this.anims.exists(idleKey)) {
+            this.player.anims.play(idleKey, true);
+        } else {
+            this.player.anims.stop();
+            this.player.setTexture(this.player.facing === 'right' ? 'idle-r' : 'idle-l');
+        }
         this.player.enforceKeyLift();
 
         this.collectiblesManager.rollbackToCheckpoint();
@@ -421,6 +435,10 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     private createAnimations() {
+        this.anims.create({ key: 'idle-r-anim', frames: this.anims.generateFrameNumbers('idle-wind-r', { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
+        this.anims.create({ key: 'idle-l-anim', frames: this.anims.generateFrameNumbers('idle-wind-l', { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
+        this.anims.create({ key: 'shoot-l-anim', frames: this.anims.generateFrameNumbers('player-shoot', { start: 0, end: 1 }), frameRate: 8, repeat: 0 });
+        this.anims.create({ key: 'shoot-r-anim', frames: [{ key: 'player-shoot', frame: 3 }, { key: 'player-shoot', frame: 2 }], frameRate: 8, repeat: 0 });
         this.anims.create({ key: 'walk-r-anim', frames: this.anims.generateFrameNumbers('walk-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'walk-l-anim', frames: this.anims.generateFrameNumbers('walk-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
@@ -443,6 +461,24 @@ export class MainStageScene extends Phaser.Scene {
         // Hedgehog - 42x30 (4 frames)
         this.anims.create({ key: 'mob-hedgehog-walk-l', frames: this.anims.generateFrameNumbers('mob-hedgehog-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
         this.anims.create({ key: 'mob-hedgehog-walk-r', frames: this.anims.generateFrameNumbers('mob-hedgehog-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+
+        // Bonsai Gripper, Pumpkin Bat, Sandal Mob
+        this.anims.create({ key: 'mob-bonsai-gripper-walk-l', frames: this.anims.generateFrameNumbers('mob-bonsai-gripper', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-bonsai-gripper-walk-r', frames: this.anims.generateFrameNumbers('mob-bonsai-gripper', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-gripper-walk-l', frames: this.anims.generateFrameNumbers('mob-bonsai-gripper', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-gripper-walk-r', frames: this.anims.generateFrameNumbers('mob-bonsai-gripper', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+
+        // Pumpkin Bat: 6 frames total - 0..2 Left fly, 3..5 Right fly
+        this.anims.create({ key: 'mob-pumpkin-bat-walk-l', frames: this.anims.generateFrameNumbers('mob-pumpkin-bat', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-pumpkin-bat-walk-r', frames: this.anims.generateFrameNumbers('mob-pumpkin-bat', { start: 3, end: 5 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-bat-walk-l', frames: this.anims.generateFrameNumbers('mob-pumpkin-bat', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-bat-walk-r', frames: this.anims.generateFrameNumbers('mob-pumpkin-bat', { start: 3, end: 5 }), frameRate: 8, repeat: -1 });
+
+        // Sandal Mob: 4 frames each
+        this.anims.create({ key: 'mob-sandal-walk-l', frames: this.anims.generateFrameNumbers('mob-sandal-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-sandal-walk-r', frames: this.anims.generateFrameNumbers('mob-sandal-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-sandal-mob-walk-l', frames: this.anims.generateFrameNumbers('mob-sandal-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-sandal-mob-walk-r', frames: this.anims.generateFrameNumbers('mob-sandal-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
     }
 
     update() {

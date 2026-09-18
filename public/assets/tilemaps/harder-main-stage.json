@@ -1,12 +1,4 @@
 { "compressionlevel":-1,
- "editorsettings":
-    {
-     "export":
-        {
-         "format":"json",
-         "target":"harder-main-stage.json"
-        }
-    },
  "height":45,
  "infinite":false,
  "layers":[
@@ -669,11 +661,21 @@
                  "y":1178.07
                 }, 
                 {
-                 "height":31.8636,
+                 "height":31.93000625,
                  "id":92,
-                 "name":"GroundMob",
+                 "name":"FlyingMob",
                  "opacity":1,
                  "properties":[
+                        {
+                         "name":"axis",
+                         "type":"string",
+                         "value":"horizontal"
+                        }, 
+                        {
+                         "name":"distance",
+                         "type":"int",
+                         "value":4
+                        }, 
                         {
                          "name":"speed",
                          "type":"int",
@@ -682,14 +684,14 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"bug-green"
+                         "value":"bat"
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":31.3636,
-                 "x":768.136,
-                 "y":352.136
+                 "width":31.94563125,
+                 "x":448.041776515152,
+                 "y":160.025086174242
                 }, 
                 {
                  "height":31.8636,
@@ -771,7 +773,7 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"bug-yellow"
+                         "value":"sandal"
                         }],
                  "rotation":0,
                  "type":"",
@@ -794,14 +796,14 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"bug-yellow"
+                         "value":"sandal"
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
                  "width":31.3636,
-                 "x":384.568,
-                 "y":352.568
+                 "x":384.443,
+                 "y":352.318
                 }, 
                 {
                  "height":31.8636,
@@ -840,14 +842,14 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"hedgehog"
+                         "value":"devil"
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
                  "width":31.3636,
-                 "x":448.318,
-                 "y":192.402
+                 "x":768.401333333333,
+                 "y":352.068666666667
                 }, 
                 {
                  "height":31.8636,
@@ -1139,8 +1141,8 @@
                  "type":"",
                  "visible":true,
                  "width":24,
-                 "x":261,
-                 "y":927.5
+                 "x":260.363636363636,
+                 "y":927.954545454545
                 }, 
                 {
                  "gid":1647,
@@ -1457,16 +1459,16 @@
                  "y":704.013
                 }, 
                 {
-                 "height":480.018931818182,
+                 "height":511.852265151515,
                  "id":150,
                  "name":"FakeGround",
                  "opacity":1,
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":1248.04,
+                 "width":1248.54,
                  "x":3488.01,
-                 "y":895.970068181818
+                 "y":896.136734848485
                 }, 
                 {
                  "height":31.8414,
@@ -1723,7 +1725,7 @@
                  "type":"",
                  "visible":true,
                  "width":24,
-                 "x":3684.30743577075,
+                 "x":3685.05743577075,
                  "y":160.024085968379
                 }, 
                 {
@@ -1751,54 +1753,6 @@
                  "width":0,
                  "x":3536.45454545455,
                  "y":754.212121212121
-                }, 
-                {
-                 "height":40.6666666666667,
-                 "id":173,
-                 "name":"FlyingMob",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":64.6666666666665,
-                 "x":3807.24242424242,
-                 "y":87.1969696969697
-                }, 
-                {
-                 "height":40.6667,
-                 "id":174,
-                 "name":"FlyingMob",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":64.6667,
-                 "x":3390.33331666667,
-                 "y":183.66665
-                }, 
-                {
-                 "height":40.6667,
-                 "id":175,
-                 "name":"FlyingMob",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":64.6667,
-                 "x":3551.66665,
-                 "y":86.3333166666667
-                }, 
-                {
-                 "height":40.6667,
-                 "id":176,
-                 "name":"FlyingMob",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":64.6667,
-                 "x":3679.66665,
-                 "y":310.999983333333
                 }, 
                 {
                  "gid":565,
@@ -1980,19 +1934,6 @@
                 }, 
                 {
                  "height":0,
-                 "id":292,
-                 "name":"Spawn",
-                 "opacity":1,
-                 "point":true,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":0,
-                 "x":45.0303030303071,
-                 "y":300.166666666665
-                }, 
-                {
-                 "height":0,
                  "id":293,
                  "name":"Checkpoint1",
                  "opacity":1,
@@ -2078,6 +2019,184 @@
                  "width":0,
                  "x":3919,
                  "y":530.333333333333
+                }, 
+                {
+                 "height":0,
+                 "id":303,
+                 "name":"Spawn",
+                 "opacity":1,
+                 "point":true,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":68.9090909090905,
+                 "y":248.181818181818
+                }, 
+                {
+                 "capsule":true,
+                 "height":0,
+                 "id":304,
+                 "name":"GunPowerup",
+                 "opacity":1,
+                 "rotation":5.92656043946261,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":4430.66666666667,
+                 "y":1237.66666666667
+                }, 
+                {
+                 "height":31.93,
+                 "id":305,
+                 "name":"FlyingMob",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"axis",
+                         "type":"string",
+                         "value":"horizontal"
+                        }, 
+                        {
+                         "name":"direction",
+                         "type":"string",
+                         "value":"left"
+                        }, 
+                        {
+                         "name":"distance",
+                         "type":"int",
+                         "value":4
+                        }, 
+                        {
+                         "name":"speed",
+                         "type":"int",
+                         "value":200
+                        }, 
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"bat"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":31.9456,
+                 "x":3775.5272,
+                 "y":383.285
+                }, 
+                {
+                 "height":31.93,
+                 "id":306,
+                 "name":"FlyingMob",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"axis",
+                         "type":"string",
+                         "value":"horizontal"
+                        }, 
+                        {
+                         "name":"direction",
+                         "type":"string",
+                         "value":"right"
+                        }, 
+                        {
+                         "name":"distance",
+                         "type":"int",
+                         "value":3
+                        }, 
+                        {
+                         "name":"speed",
+                         "type":"int",
+                         "value":200
+                        }, 
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"bat"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":31.9456,
+                 "x":3391.65598787879,
+                 "y":223.991439393939
+                }, 
+                {
+                 "height":31.93,
+                 "id":307,
+                 "name":"FlyingMob",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"axis",
+                         "type":"string",
+                         "value":"horizontal"
+                        }, 
+                        {
+                         "name":"direction",
+                         "type":"string",
+                         "value":"left"
+                        }, 
+                        {
+                         "name":"distance",
+                         "type":"int",
+                         "value":5
+                        }, 
+                        {
+                         "name":"speed",
+                         "type":"int",
+                         "value":200
+                        }, 
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"bat"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":31.9456,
+                 "x":3680.11810909091,
+                 "y":128.10696969697
+                }, 
+                {
+                 "height":31.93,
+                 "id":308,
+                 "name":"FlyingMob",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"axis",
+                         "type":"string",
+                         "value":"horizontal"
+                        }, 
+                        {
+                         "name":"direction",
+                         "type":"string",
+                         "value":"right"
+                        }, 
+                        {
+                         "name":"distance",
+                         "type":"int",
+                         "value":6
+                        }, 
+                        {
+                         "name":"speed",
+                         "type":"int",
+                         "value":200
+                        }, 
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"bat"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":31.9456,
+                 "x":3712.0272,
+                 "y":191.951666666667
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -2156,7 +2275,7 @@
          "y":0
         }],
  "nextlayerid":12,
- "nextobjectid":303,
+ "nextobjectid":309,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
