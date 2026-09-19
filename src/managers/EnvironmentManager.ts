@@ -48,6 +48,7 @@ export class EnvironmentManager {
 
     public doorExitX: number = 0;
     public doorExitY: number = 0;
+    private doorPrompt?: Phaser.GameObjects.Container;
 
     constructor(
         scene: Phaser.Scene, 
@@ -490,11 +491,45 @@ export class EnvironmentManager {
         }
         this.player.isNearDoor = isPlayerInDoor;
 
-        const enterPressed = Phaser.Input.Keyboard.JustDown(this.player.enterKey) || 
+        if (isPlayerInDoor) {
+            // Display sleek "E to enter" floating prompt above player
+            if (!this.doorPrompt) {
+                const bg = this.scene.add.graphics();
+                bg.fillStyle(0x0f172a, 0.9);
+                bg.fillRoundedRect(-48, -14, 96, 28, 8);
+                bg.lineStyle(1.5, 0x38bdf8, 0.95);
+                bg.strokeRoundedRect(-48, -14, 96, 28, 8);
+
+                const txt = this.scene.add.text(0, 0, 'E to enter', {
+                    fontSize: '13px',
+                    fontFamily: 'Arial, sans-serif',
+                    color: '#f8fafc',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                this.doorPrompt = this.scene.add.container(this.player.x, this.player.y - 36, [bg, txt]);
+                this.doorPrompt.setDepth(30);
+            } else {
+                this.doorPrompt.setPosition(this.player.x, this.player.y - 36);
+            }
+        } else {
+            if (this.doorPrompt) {
+                this.doorPrompt.destroy();
+                this.doorPrompt = undefined;
+            }
+        }
+
+        const enterPressed = Phaser.Input.Keyboard.JustDown(this.player.keyE) ||
+                             Phaser.Input.Keyboard.JustDown(this.player.enterKey) ||
                              Phaser.Input.Keyboard.JustDown(this.player.cursors.up) ||
                              (this.player.keyW && Phaser.Input.Keyboard.JustDown(this.player.keyW));
 
         if (isPlayerInDoor && enterPressed && this.doorExitX !== 0) {
+            if (this.doorPrompt) {
+                this.doorPrompt.destroy();
+                this.doorPrompt = undefined;
+            }
+            this.player.isNearDoor = false;
             this.player.setPosition(this.doorExitX, this.doorExitY); 
             this.player.setVelocity(0, 0);
             this.scene.cameras.main.flash(150, 255, 255, 255);

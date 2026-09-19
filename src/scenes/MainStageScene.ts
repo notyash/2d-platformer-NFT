@@ -19,6 +19,8 @@ export class MainStageScene extends Phaser.Scene {
 
     private groundLayer!: Phaser.Tilemaps.TilemapLayer;
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
+    private smashLayer?: Phaser.Tilemaps.TilemapLayer;
+    private hazardsLayer?: Phaser.Tilemaps.TilemapLayer;
 
     // Hardcore Speedrun & Death State
     private initialSpawnX: number = 100;
@@ -52,7 +54,8 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('plain-ground', 'assets/tilesets/plainGround.png');
 
         this.load.image('moving-platform-img', 'assets/sprites/moving-platform.png');
-        this.load.spritesheet('pipe-monster', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
+        this.load.image('pipe-monster-l', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
+        this.load.image('pipe-monster-r', 'assets/sprites/monsters/Devil_Red_Stand_R.png');
         this.load.image('jump-pad-img', 'assets/sprites/jump-pad.png');
         this.load.spritesheet('coin', 'assets/sprites/collectibles/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
         
@@ -111,7 +114,7 @@ export class MainStageScene extends Phaser.Scene {
 
         // Enforce clean nearest-neighbor pixel sampling on mob textures to prevent edge bleeding
         const mobTextureKeys = [
-            'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster',
+            'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster-l', 'pipe-monster-r',
             'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
             'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
             'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin'
@@ -162,7 +165,7 @@ export class MainStageScene extends Phaser.Scene {
         this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.collectiblesManager, this.soundManager);
 
         // Setup Entities & Level Objects
-        this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer);
+        this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
         this.enemyManager.setupPipeMonsters(map, rawMapObjects);
         
         this.envManager.setupCheckpoints(rawMapObjects);
@@ -240,10 +243,19 @@ export class MainStageScene extends Phaser.Scene {
             });
         }
 
-        // Accidental Reload Guard (beforeunload event)
+        // Accidental Reload Guard (beforeunload event) & Auto-Pause on Window Blur / Focus Loss
         window.addEventListener('beforeunload', this.beforeUnloadHandler);
+        window.addEventListener('blur', this.onWindowBlur);
+        document.addEventListener('visibilitychange', this.onVisibilityChange);
+        this.game.events.on(Phaser.Core.Events.BLUR, this.onWindowBlur);
+        this.game.events.on(Phaser.Core.Events.HIDDEN, this.onWindowBlur);
+
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
             window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+            window.removeEventListener('blur', this.onWindowBlur);
+            document.removeEventListener('visibilitychange', this.onVisibilityChange);
+            this.game.events.off(Phaser.Core.Events.BLUR, this.onWindowBlur);
+            this.game.events.off(Phaser.Core.Events.HIDDEN, this.onWindowBlur);
         });
 
         // World Colliders
@@ -262,25 +274,23 @@ export class MainStageScene extends Phaser.Scene {
             bullet.destroy();
         });
 
-        const smashLayer = map.getLayer('SmashGround')?.tilemapLayer;
-        if (smashLayer) {
-            this.physics.add.collider(this.player, smashLayer, undefined, (_p, tile) => {
+        if (this.smashLayer) {
+            this.physics.add.collider(this.player, this.smashLayer, undefined, (_p, tile) => {
                 const t = tile as Phaser.Tilemaps.Tile;
                 if (t.index === -1) return false;
                 const body = this.player.body as Phaser.Physics.Arcade.Body;
                 return body.velocity.y > 0 && body.bottom <= t.pixelY + 10 && !this.player.canSmash;
             });
 
-            this.physics.add.collider(this.player.bullets, smashLayer, (bulletObj) => {
+            this.physics.add.collider(this.player.bullets, this.smashLayer, (bulletObj) => {
                 const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
                 this.uiManager.spawnParticles(bullet.x, bullet.y, 0xFF8C00);
                 bullet.destroy();
             });
         }
 
-        const hazardsLayer = map.getLayer('Hazards')?.tilemapLayer;
-        if (hazardsLayer) {
-            this.physics.add.overlap(this.player, hazardsLayer, () => this.player.die(), (_p, tile) => (tile as Phaser.Tilemaps.Tile).index !== -1);
+        if (this.hazardsLayer) {
+            this.physics.add.overlap(this.player, this.hazardsLayer, () => this.player.die(), (_p, tile) => (tile as Phaser.Tilemaps.Tile).index !== -1);
         }
 
         this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -301,7 +311,20 @@ export class MainStageScene extends Phaser.Scene {
         e.returnValue = '';
     };
 
+    private onWindowBlur = () => {
+        if (!this.isGamePaused) {
+            this.pauseGame();
+        }
+    };
+
+    private onVisibilityChange = () => {
+        if (document.hidden && !this.isGamePaused) {
+            this.pauseGame();
+        }
+    };
+
     private pauseGame() {
+        if (this.isGamePaused) return;
         this.isGamePaused = true;
         this.pauseStartTime = this.time.now;
         this.physics.pause();
@@ -398,7 +421,8 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     private getFormattedElapsedTime(): string {
-        const elapsedMs = Math.max(0, this.time.now - this.startTime - this.totalPausedTime);
+        const currentPauseOffset = this.isGamePaused ? (this.time.now - this.pauseStartTime) : 0;
+        const elapsedMs = Math.max(0, this.time.now - this.startTime - this.totalPausedTime - currentPauseOffset);
         const minutes = Math.floor(elapsedMs / 60000);
         const seconds = Math.floor((elapsedMs % 60000) / 1000);
         const millis = Math.floor(elapsedMs % 1000);
@@ -434,16 +458,16 @@ export class MainStageScene extends Phaser.Scene {
         this.oneWayLayer.setDepth(4);
         this.oneWayLayer.setCollisionByExclusion([-1]);
 
-        const smashLayer = map.createLayer('SmashGround', allTilesets, 0, 0);
-        if (smashLayer) {
-            smashLayer.setDepth(4);
-            smashLayer.setCollisionByExclusion([-1]);
+        this.smashLayer = (map.createLayer('SmashGround', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
+        if (this.smashLayer) {
+            this.smashLayer.setDepth(4);
+            this.smashLayer.setCollisionByExclusion([-1]);
         }
 
-        const hazardsLayer = map.createLayer('Hazards', allTilesets, 0, 0);
-        if (hazardsLayer) {
-            hazardsLayer.setDepth(5);
-            hazardsLayer.setCollisionByExclusion([-1]);
+        this.hazardsLayer = (map.createLayer('Hazards', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
+        if (this.hazardsLayer) {
+            this.hazardsLayer.setDepth(5);
+            this.hazardsLayer.setCollisionByExclusion([-1]);
         }
 
         map.createLayer('Foreground', allTilesets, 0, 0)?.setDepth(7);
@@ -498,9 +522,6 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'mob-lava-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'mob-kappa-walk-l', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'mob-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
-
-        // Pipe Monster (Devil)
-        this.anims.create({ key: 'pipe-monster-anim', frames: this.anims.generateFrameNumbers('pipe-monster', { start: 0, end: 5 }), frameRate: 6, repeat: -1 });
     }
 
     update() {
@@ -519,8 +540,8 @@ export class MainStageScene extends Phaser.Scene {
         );
 
         this.player.update();
+        this.envManager.update();
         this.inventoryManager.update();
         this.enemyManager.update(this.groundLayer, this.oneWayLayer);
-        this.envManager.update();
     }
 }

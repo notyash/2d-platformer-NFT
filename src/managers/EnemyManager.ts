@@ -28,6 +28,8 @@ export class EnemyManager {
     private rawMapObjects: any[] = [];
     private groundLayer!: Phaser.Tilemaps.TilemapLayer;
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
+    private hazardsLayer?: Phaser.Tilemaps.TilemapLayer;
+    private smashLayer?: Phaser.Tilemaps.TilemapLayer;
     private map!: Phaser.Tilemaps.Tilemap;
 
     constructor(
@@ -67,10 +69,18 @@ export class EnemyManager {
         }
     }
 
-    setupGroundMobs(rawMapObjects: any[], groundLayer: Phaser.Tilemaps.TilemapLayer, oneWayLayer: Phaser.Tilemaps.TilemapLayer) {
+    setupGroundMobs(
+        rawMapObjects: any[], 
+        groundLayer: Phaser.Tilemaps.TilemapLayer, 
+        oneWayLayer: Phaser.Tilemaps.TilemapLayer, 
+        hazardsLayer?: Phaser.Tilemaps.TilemapLayer,
+        smashLayer?: Phaser.Tilemaps.TilemapLayer
+    ) {
         this.rawMapObjects = rawMapObjects;
         this.groundLayer = groundLayer;
         this.oneWayLayer = oneWayLayer;
+        this.hazardsLayer = hazardsLayer;
+        this.smashLayer = smashLayer;
 
         // Parse Ignore Line-of-Sight Zones
         this.ignoreLOSZones = [];
@@ -85,6 +95,11 @@ export class EnemyManager {
 
         // Mobs vs Ground Layer collision
         this.scene.physics.add.collider(this.groundMobs, this.groundLayer);
+
+        // Mobs vs Smash Ground collision
+        if (this.smashLayer) {
+            this.scene.physics.add.collider(this.groundMobs, this.smashLayer);
+        }
 
         // Mobs vs One-Way Platforms collision
         this.scene.physics.add.collider(this.groundMobs, this.oneWayLayer, undefined, (mobObj, tile) => {
@@ -152,6 +167,32 @@ export class EnemyManager {
             }
         );
 
+        if (this.smashLayer) {
+            this.scene.physics.add.collider(
+                this.enemyBullets, 
+                this.smashLayer, 
+                (bulletObj) => {
+                    const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+                    this.uiManager.spawnParticles(bullet.x, bullet.y, 0x94A3B8);
+                    bullet.destroy();
+                },
+                (bulletObj, tile) => {
+                    const t = tile as Phaser.Tilemaps.Tile;
+                    if (t.index === -1) return false;
+
+                    const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+                    const boundZone = bullet.getData('boundZone') as Phaser.Geom.Rectangle | undefined;
+                    const isInsideBoundZone = boundZone && Phaser.Geom.Rectangle.Contains(boundZone, bullet.x, bullet.y);
+                    const ignoreWalls = (bullet.getData('ignoreWalls') as boolean) || false;
+
+                    if (isInsideBoundZone || ignoreWalls) {
+                        return false;
+                    }
+                    return true;
+                }
+            );
+        }
+
         this.spawnGroundMobs();
         this.spawnFlyingMobs();
         this.saveCheckpointSnapshot();
@@ -161,27 +202,27 @@ export class EnemyManager {
         if (!obj) return undefined;
         const lookup = keys.map(k => k.toLowerCase());
 
-        // 1. Direct property on obj
-        for (const k of Object.keys(obj)) {
-            if (lookup.includes(k.toLowerCase()) && obj[k] !== undefined) {
-                return obj[k];
-            }
-        }
-
-        // 2. In obj.properties Array
+        // 1. Check in obj.properties Array first (Custom Properties from Tiled)
         if (Array.isArray(obj.properties)) {
             const found = obj.properties.find((p: any) => p && p.name && lookup.includes(p.name.toLowerCase()));
-            if (found && found.value !== undefined) {
+            if (found && found.value !== undefined && found.value !== null && String(found.value).trim() !== '') {
                 return found.value;
             }
         }
 
-        // 3. In obj.properties Object
+        // 2. Check in obj.properties Object (if key-value map)
         if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
             for (const k of Object.keys(obj.properties)) {
-                if (lookup.includes(k.toLowerCase()) && obj.properties[k] !== undefined) {
+                if (lookup.includes(k.toLowerCase()) && obj.properties[k] !== undefined && obj.properties[k] !== null && String(obj.properties[k]).trim() !== '') {
                     return obj.properties[k];
                 }
+            }
+        }
+
+        // 3. Check direct property on obj (e.g. obj.type, obj.name, obj.class)
+        for (const k of Object.keys(obj)) {
+            if (lookup.includes(k.toLowerCase()) && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+                return obj[k];
             }
         }
 
@@ -231,20 +272,38 @@ export class EnemyManager {
         const mobObjects = this.rawMapObjects.filter((o: any) => {
             const nameLower = (o.name || '').toLowerCase();
             const typeLower = (o.type || '').toLowerCase();
-            const customType = String(this.getProp(o, ['type', 'mobtype', 'mob_type', 'monster']) || '').toLowerCase();
+            const customType = String(this.getProp(o, ['type', 'mobtype', 'mob_type', 'monster', 'mob']) || '').toLowerCase();
 
             const isGroundName = (
-                nameLower === 'groundmob' || 
+                nameLower.includes('ground') || 
                 nameLower === 'mob' || 
                 nameLower === 'enemy' || 
                 nameLower.includes('shoot') ||
                 nameLower.includes('shiro') ||
                 nameLower.includes('ghost') ||
                 nameLower.includes('teleport') ||
+                nameLower.includes('sandal') ||
+                nameLower.includes('kappa') ||
+                nameLower.includes('bug') ||
+                nameLower.includes('devil') ||
+                nameLower.includes('hedgehog') ||
+                nameLower.includes('gripper') ||
+                nameLower.includes('bonsai') ||
                 typeLower.includes('ghost') ||
                 typeLower.includes('shiro') ||
+                typeLower.includes('sandal') ||
+                typeLower.includes('kappa') ||
+                typeLower.includes('devil') ||
+                typeLower.includes('hedgehog') ||
+                typeLower.includes('gripper') ||
                 customType.includes('ghost') ||
-                customType.includes('shiro')
+                customType.includes('shiro') ||
+                customType.includes('sandal') ||
+                customType.includes('kappa') ||
+                customType.includes('bug') ||
+                customType.includes('devil') ||
+                customType.includes('hedgehog') ||
+                customType.includes('gripper')
             );
             if (!isGroundName) return false;
             
@@ -262,15 +321,18 @@ export class EnemyManager {
                 return;
             }
 
-            let mobType = (obj.name === 'ShooterMob' || obj.name === 'ShootingMob') ? 'lava-kappa' : 
-                          (obj.name === 'ShiroOnna' || obj.name === 'GhostMob' || obj.name === 'TeleportMob') ? 'shiro-onna' : 'bug-green';
-            if (obj.type && typeof obj.type === 'string' && obj.type.trim() !== '') {
+            let mobType = 'bug-green';
+            const customType = this.getProp(obj, ['type', 'mobtype', 'mob_type', 'monster', 'mob']);
+            if (customType && String(customType).trim() !== '') {
+                mobType = String(customType).trim();
+            } else if (obj.type && typeof obj.type === 'string' && obj.type.trim() !== '') {
                 mobType = obj.type.trim();
-            }
-
-            const rawCustomType = this.getProp(obj, ['type', 'mobtype', 'mob_type', 'monster']);
-            if (rawCustomType && String(rawCustomType).trim() !== '') {
-                mobType = String(rawCustomType).trim();
+            } else if (obj.name && typeof obj.name === 'string' && obj.name.trim() !== '') {
+                const n = obj.name.trim();
+                if (n === 'ShooterMob' || n === 'ShootingMob') mobType = 'lava-kappa';
+                else if (n === 'ShiroOnna' || n === 'GhostMob' || n === 'TeleportMob') mobType = 'shiro-onna';
+                else if (n.toLowerCase().includes('sandal')) mobType = 'sandal';
+                else if (n !== 'GroundMob' && n !== 'Mob' && n !== 'Enemy') mobType = n;
             }
 
             let mobSpeed = 60;
@@ -356,7 +418,7 @@ export class EnemyManager {
             if (vRangeProp !== undefined && vRangeProp !== null && vRangeProp !== '') {
                 const rawVal = Number(vRangeProp);
                 if (!isNaN(rawVal)) {
-                    verticalRange = rawVal <= 10 ? rawVal * 32 : rawVal;
+                    verticalRange = rawVal <= 50 ? rawVal * 32 : rawVal;
                     if (rawVal === 0) verticalTeleport = false;
                 }
             }
@@ -366,6 +428,15 @@ export class EnemyManager {
                 verticalMode = String(vModeProp).toLowerCase().trim();
                 if (verticalMode === 'same' || verticalMode === 'none' || verticalMode === 'horizontal') {
                     verticalTeleport = false;
+                }
+            }
+
+            let horizontalRange: number | undefined = undefined;
+            const hRangeProp = this.getProp(obj, ['horizontalrange', 'horizontal_range', 'hrange', 'maxhorizontal', 'maxh', 'horizontal']);
+            if (hRangeProp !== undefined && hRangeProp !== null && hRangeProp !== '') {
+                const rawH = Number(hRangeProp);
+                if (!isNaN(rawH)) {
+                    horizontalRange = rawH <= 50 ? rawH * 32 : rawH;
                 }
             }
 
@@ -414,6 +485,11 @@ export class EnemyManager {
             }
             
             mob.setData('uniqueKey', uniqueKey);
+            mob.setData('spawnX', spawnX);
+            mob.setData('spawnY', spawnY);
+            if (horizontalRange !== undefined) {
+                mob.setData('horizontalRange', horizontalRange);
+            }
             mob.setData('direction', initialDir);
             mob.setData('speed', mobSpeed); 
             mob.setData('stationary', isStationary);
@@ -659,7 +735,7 @@ export class EnemyManager {
                 const isAbove = pBody.bottom <= monster.y + 4;
 
                 if (isFalling && isAbove) {
-                    this.player.setVelocityY(-380);
+                    this.player.stompBounce(-380);
                     this.killPipeMonster(monster);
                 } else {
                     this.player.die();
@@ -699,7 +775,7 @@ export class EnemyManager {
     private spawnPipeMonsters() {
         this.pipeMonsters.clear(true, true);
 
-        const monsterObjects = this.map.createFromObjects('Objects', { name: 'PipeMonster', key: 'pipe-monster' });
+        const monsterObjects = this.map.createFromObjects('Objects', { name: 'PipeMonster', key: 'pipe-monster-l' });
         const rawObjects = this.rawMapObjects.filter((o: any) => o.name === 'PipeMonster');
 
         monsterObjects.forEach((obj: any, index: number) => {
@@ -715,14 +791,25 @@ export class EnemyManager {
             const monsterBody = obj.body as Phaser.Physics.Arcade.Body;
             monsterBody.allowGravity = false; 
             monsterBody.immovable = true; 
-            monsterBody.setSize(24, 24);
-            monsterBody.setOffset(9, 3);
+            monsterBody.setSize(24, 20);
+            monsterBody.setOffset(4, 3);
             
             obj.setDepth(2.9);
+            obj.setTexture('pipe-monster-l');
 
-            if (this.scene.anims.exists('pipe-monster-anim')) {
-                obj.play('pipe-monster-anim');
-            }
+            // Look left and right at a fixed interval using dedicated Devil_Red_Stand_L/R images
+            const lookTimer = this.scene.time.addEvent({
+                delay: 750,
+                loop: true,
+                callback: () => {
+                    if (obj && obj.active) {
+                        const nextTex = obj.texture.key === 'pipe-monster-l' ? 'pipe-monster-r' : 'pipe-monster-l';
+                        obj.setTexture(nextTex);
+                    } else if (lookTimer) {
+                        lookTimer.destroy();
+                    }
+                }
+            });
 
             let popDuration = 200;
             const rawObj = rawObjects[index];
@@ -776,8 +863,7 @@ export class EnemyManager {
         const isAbove = pBody.bottom <= mBody.top + 16 || pBody.center.y < mBody.top + 8;
 
         if (isFalling && isAbove) {
-            this.player.setVelocityY(-380); 
-            this.player.isNormalJump = false;
+            this.player.stompBounce(-380); 
             this.killMob(mob, 'stomp');
         } else {
             this.player.die();
@@ -896,6 +982,12 @@ export class EnemyManager {
                 return false;
             }
         }
+        if (this.smashLayer) {
+            const smashTiles = this.smashLayer.getTilesWithinShape(line);
+            for (const tile of smashTiles) {
+                if (tile && tile.index !== -1) return false;
+            }
+        }
         return true;
     }
 
@@ -972,7 +1064,9 @@ export class EnemyManager {
         const isPlayerInAir = !pBody.blocked.down && !this.player.isOnPlatform;
         const projectedLandingX = this.player.x + (pBody.velocity.x * 0.35);
 
-        // Custom Vertical Teleportation Constraints
+        // Custom Teleportation Constraints
+        const horizontalRange = mob.getData('horizontalRange') as number | undefined;
+        const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
         const verticalTeleport = mob.getData('verticalTeleport') !== false;
         const verticalRange = (mob.getData('verticalRange') as number) || 96;
         const verticalMode = (mob.getData('verticalMode') as string) || 'any';
@@ -1014,35 +1108,82 @@ export class EnemyManager {
 
             for (const xOff of candidateXOffsets) {
                 const testX = this.player.x + xOff;
+
+                // 1. Horizontal Range check from original spawn position
+                if (horizontalRange !== undefined && Math.abs(testX - spawnX) > horizontalRange) continue;
+
                 const gTile = groundLayer.getTileAtWorldXY(testX, testY);
                 const owTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(testX, testY) : null;
-                const hasSolidFloor = (gTile && gTile.index !== -1) || (owTile && owTile.index !== -1);
+                const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(testX, testY) : null;
+                const hasSolidFloor = (gTile && gTile.index !== -1) || (owTile && owTile.index !== -1) || (smashTile && smashTile.index !== -1);
 
                 if (!hasSolidFloor) continue;
 
                 const floorY = Math.floor(testY / 32) * 32; // Top surface of floor tile in world px
 
-                // 1. Strict Vertical Distance Checks relative to BOTH Player and Mob
+                // 2. Vertical Distance Checks relative to Player and Mob
                 const pDiff = floorY - this.player.y;
-                if (pDiff < -maxUpPx - 16 || pDiff > maxDownPx + 32) continue;
+                if (pDiff < -maxUpPx - 24 || pDiff > maxDownPx + 36) continue;
 
                 const mDiff = floorY - mob.y;
-                if (mDiff < -maxUpPx - 16 || mDiff > maxDownPx + 32) continue;
+                if (mDiff < -maxUpPx - 24 || mDiff > maxDownPx + 36) continue;
 
-                // 2. Headroom clearance (check space above floor where ghost stands)
-                const headTile = groundLayer.getTileAtWorldXY(testX, floorY - 16);
-                if (headTile && headTile.index !== -1) continue;
-                const headTopTile = groundLayer.getTileAtWorldXY(testX, floorY - 28);
-                if (headTopTile && headTopTile.index !== -1) continue;
+                // 3. Anti-Clipping Bounding Box Clearance: ensure the entire 24x30 ghost standing box is empty air
+                const samplePoints = [
+                    { x: testX, y: floorY - 8 },
+                    { x: testX - 10, y: floorY - 8 },
+                    { x: testX + 10, y: floorY - 8 },
+                    { x: testX, y: floorY - 22 },
+                    { x: testX - 10, y: floorY - 22 },
+                    { x: testX + 10, y: floorY - 22 },
+                    { x: testX, y: floorY - 30 }
+                ];
+                let isBlocked = false;
+                for (const pt of samplePoints) {
+                    const tile = groundLayer.getTileAtWorldXY(pt.x, pt.y);
+                    const sTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(pt.x, pt.y) : null;
+                    if ((tile && tile.index !== -1) || (sTile && sTile.index !== -1)) {
+                        isBlocked = true;
+                        break;
+                    }
+                }
+                if (isBlocked) continue;
 
-                // 3. Landing Zone Guard: Prevent spawning directly underneath a jumping/falling player
+                // Ensure tile directly above floor is not solid (prevents spawning inside a solid block column)
+                const tileAbove = groundLayer.getTileAtWorldXY(testX, floorY - 2);
+                const sTileAbove = this.smashLayer ? this.smashLayer.getTileAtWorldXY(testX, floorY - 2) : null;
+                if ((tileAbove && tileAbove.index !== -1) || (sTileAbove && sTileAbove.index !== -1)) continue;
+
+                // 4. Hazard Avoidance: Ghost strictly avoids everything on the hazards layer (spikes, lava, death zones in empty air)
+                if (this.hazardsLayer) {
+                    const hPoints = [
+                        { x: testX, y: floorY - 6 },
+                        { x: testX - 10, y: floorY - 6 },
+                        { x: testX + 10, y: floorY - 6 },
+                        { x: testX, y: floorY - 18 },
+                        { x: testX - 10, y: floorY - 18 },
+                        { x: testX + 10, y: floorY - 18 },
+                        { x: testX, y: floorY - 28 }
+                    ];
+                    let isHazard = false;
+                    for (const hp of hPoints) {
+                        const hTile = this.hazardsLayer.getTileAtWorldXY(hp.x, hp.y);
+                        if (hTile && hTile.index !== -1) {
+                            isHazard = true;
+                            break;
+                        }
+                    }
+                    if (isHazard) continue;
+                }
+
+                // 5. Landing Zone Guard: Prevent spawning directly underneath a jumping/falling player
                 const currentDistX = Math.abs(testX - this.player.x);
                 const projectedDistX = Math.abs(testX - projectedLandingX);
                 const isFloorUnderPlayer = floorY >= this.player.y - 8;
                 const requiredBuffer = (isPlayerInAir && isFloorUnderPlayer) ? 50 : 38;
                 if (currentDistX < requiredBuffer || projectedDistX < requiredBuffer) continue;
 
-                // 5. World Bounds Check
+                // 6. World Bounds Check
                 const withinBounds = testX > 32 && testX < this.scene.physics.world.bounds.width - 32 &&
                                      floorY > 32 && floorY < this.scene.physics.world.bounds.height - 16;
                 if (!withinBounds) continue;
@@ -1156,7 +1297,8 @@ export class EnemyManager {
                     
                     const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
                     const oneWayTile = oneWayLayer.getTileAtWorldXY(checkX, checkY);
-                    const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1);
+                    const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
+                    const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1);
                     
                     if (!hasFloor) dir *= -1; 
                 }

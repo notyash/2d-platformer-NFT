@@ -149,6 +149,7 @@ export class InventoryManager {
     }
 
     public update() {
+        if (this.player.isNearDoor) return;
         if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
             this.activateShield();
         }

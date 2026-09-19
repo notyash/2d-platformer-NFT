@@ -14,6 +14,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public keyA!: Phaser.Input.Keyboard.Key;
     public keyS!: Phaser.Input.Keyboard.Key;
     public keyD!: Phaser.Input.Keyboard.Key;
+    public keyE!: Phaser.Input.Keyboard.Key;
 
     public facing: Facing = 'right';
     public canJump: boolean = true;
@@ -74,6 +75,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.keyA = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
         this.keyS = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
         this.keyD = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+        this.keyE = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
         this.bullets = scene.physics.add.group({ allowGravity: false });
     }
@@ -93,6 +95,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.requireKeyLift.ctrl = rawCtrl;
         this.lastMouseDown = rawMouse;
         this.lastCtrlDown = rawCtrl;
+    }
+
+    public stompBounce(bounceVelocity: number = -380) {
+        this.setVelocityY(bounceVelocity);
+        this.isNormalJump = false;
+        this.canJump = true;
     }
 
     update() {

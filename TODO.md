@@ -55,8 +55,8 @@
 - [ ] **Anti-Cheat Verification**: Generate input timeline/hash payloads to validate legitimate clears against API spoofing.
 - [ ] **Local Storage & Offline Caching**: Cache user personal bests, high scores, and audio preferences locally as a fallback.
 
----
-
-### ?? Gameplay Polish & World Expansion
+### 🎨 Gameplay Polish & World Expansion
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
+- [ ] **Manual Monster Spritesheet Padding**: Fix / add 1-2px internal transparent margin to monster PNGs (Sandal Mob, Bonsai Gripper, Lava Kappa, Shiro Onna) to eliminate 1px top-edge border clipping without losing sprite details.
+

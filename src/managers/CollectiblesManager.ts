@@ -114,6 +114,19 @@ export class CollectiblesManager {
                 return;
             }
 
+            // Check for custom scale property or default collectible scale
+            let customScale = 1.0;
+            if (Array.isArray(obj.properties)) {
+                const scaleProp = obj.properties.find((p: any) => p.name === 'scale');
+                if (scaleProp && typeof scaleProp.value === 'number') customScale = scaleProp.value;
+            }
+            if (name === 'GunPowerup' && customScale === 1.0) {
+                customScale = 0.65; // Sized down from raw 32x32 to ~21px
+            }
+            if (customScale !== 1.0) {
+                obj.setScale(customScale);
+            }
+
             this.scene.physics.add.existing(obj, true);
             obj.setDepth(2.8);
             obj.setData('uniqueKey', uniqueKey);
@@ -139,7 +152,7 @@ export class CollectiblesManager {
         const startY = obj.y;
         this.scene.tweens.add({ 
             targets: obj, y: startY - 4, duration: 1000 + Math.random() * 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            onUpdate: () => { if (body && obj.active) body.y = obj.y - (obj.height * obj.originY); }
+            onUpdate: () => { if (body && obj.active) body.y = obj.y - (obj.displayHeight * obj.originY); }
         });
     }
 }
