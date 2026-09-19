@@ -112,7 +112,7 @@ export class EnemyManager {
         // Player vs Ground Mobs overlap (instant stomp detection & fatal side hits)
         this.scene.physics.add.overlap(this.player, this.groundMobs, this.handlePlayerMobCollision);
 
-        // Player vs Flying Mobs overlap (flying mobs cannot be stomped, only shot)
+        // Player vs Flying Mobs overlap (instant stomp detection & fatal side hits)
         this.scene.physics.add.overlap(this.player, this.flyingMobs, this.handlePlayerFlyingMobCollision);
 
         // Player Bullets vs Ground Mobs & Flying Mobs overlap (kill mob with blaster)
@@ -274,11 +274,33 @@ export class EnemyManager {
             const typeLower = (o.type || '').toLowerCase();
             const customType = String(this.getProp(o, ['type', 'mobtype', 'mob_type', 'monster', 'mob']) || '').toLowerCase();
 
+            // Exclude zones, triggers, collectibles, platforms, environment hazards, etc.
+            const isNonMob = (
+                nameLower.includes('zone') || 
+                nameLower.includes('trigger') || 
+                nameLower.includes('fake') || 
+                nameLower.includes('platform') || 
+                nameLower.includes('checkpoint') || 
+                nameLower.includes('door') || 
+                nameLower.includes('pad') || 
+                nameLower.includes('coin') || 
+                nameLower.includes('powerup') || 
+                nameLower.includes('totem') || 
+                nameLower.includes('firebar') ||
+                nameLower.includes('water') ||
+                nameLower.includes('spawn') ||
+                nameLower.includes('pipe')
+            );
+            if (isNonMob) return false;
+
             const isGroundName = (
-                nameLower.includes('ground') || 
+                nameLower.includes('groundmob') || 
+                nameLower.includes('ground_mob') || 
+                nameLower === 'ground' ||
                 nameLower === 'mob' || 
                 nameLower === 'enemy' || 
-                nameLower.includes('shoot') ||
+                nameLower.includes('shooter') ||
+                nameLower.includes('shooting') ||
                 nameLower.includes('shiro') ||
                 nameLower.includes('ghost') ||
                 nameLower.includes('teleport') ||
@@ -296,6 +318,7 @@ export class EnemyManager {
                 typeLower.includes('devil') ||
                 typeLower.includes('hedgehog') ||
                 typeLower.includes('gripper') ||
+                typeLower.includes('shooter') ||
                 customType.includes('ghost') ||
                 customType.includes('shiro') ||
                 customType.includes('sandal') ||
@@ -303,7 +326,8 @@ export class EnemyManager {
                 customType.includes('bug') ||
                 customType.includes('devil') ||
                 customType.includes('hedgehog') ||
-                customType.includes('gripper')
+                customType.includes('gripper') ||
+                customType.includes('shooter')
             );
             if (!isGroundName) return false;
             
@@ -462,22 +486,31 @@ export class EnemyManager {
                 else if (val === 'right' || val === '1') initialDir = 1;
             }
 
+            let mobScale = 1.0;
+            const scaleProp = this.getProp(obj, ['scale', 'mobscale', 'size']);
+            if (scaleProp !== undefined && scaleProp !== null && scaleProp !== '') {
+                const s = Number(scaleProp);
+                if (!isNaN(s) && s > 0) mobScale = s;
+            }
+
             const normalizedType = this.normalizeMobType(mobType);
             const texInfo = this.getMobTextureAndFrame(normalizedType, initialDir);
             const initialAnim = this.getMobAnimKey(normalizedType, initialDir);
 
             const mob = this.groundMobs.create(spawnX, spawnY, texInfo.key, texInfo.frame) as Phaser.Physics.Arcade.Sprite;
             mob.setDepth(4).setOrigin(0.5, 1); 
+            if (mobScale !== 1.0) {
+                mob.setScale(mobScale);
+            }
             
             const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper' || normalizedType === 'lava-kappa' || normalizedType === 'shiro-onna';
             const body = mob.body as Phaser.Physics.Arcade.Body;
-            if (is32x32) {
-                body.setSize(22, 22);
-                body.setOffset(5, 10);
-            } else {
-                body.setSize(24, 24);
-                body.setOffset(9, 6);
-            }
+            const baseW = is32x32 ? 22 : 24;
+            const baseH = is32x32 ? 22 : 24;
+            const baseOffX = is32x32 ? 5 : 9;
+            const baseOffY = is32x32 ? 10 : 6;
+            body.setSize(baseW, baseH);
+            body.setOffset(baseOffX, baseOffY);
             body.setCollideWorldBounds(true);
             
             if (!isStationary && this.scene.anims.exists(initialAnim)) {
@@ -487,6 +520,7 @@ export class EnemyManager {
             mob.setData('uniqueKey', uniqueKey);
             mob.setData('spawnX', spawnX);
             mob.setData('spawnY', spawnY);
+            mob.setData('scale', mobScale);
             if (horizontalRange !== undefined) {
                 mob.setData('horizontalRange', horizontalRange);
             }
@@ -650,24 +684,33 @@ export class EnemyManager {
                 spawnY = obj.y;
             }
 
+            let mobScale = 1.0;
+            const scaleProp = this.getProp(obj, ['scale', 'mobscale', 'size']);
+            if (scaleProp !== undefined && scaleProp !== null && scaleProp !== '') {
+                const s = Number(scaleProp);
+                if (!isNaN(s) && s > 0) mobScale = s;
+            }
+
             const normalizedType = this.normalizeMobType(mobType);
             const texInfo = this.getMobTextureAndFrame(normalizedType, initialDir);
             const initialAnim = this.getMobAnimKey(normalizedType, initialDir);
 
             const mob = this.flyingMobs.create(spawnX, spawnY, texInfo.key, texInfo.frame) as Phaser.Physics.Arcade.Sprite;
             mob.setDepth(4).setOrigin(0.5, 1);
+            if (mobScale !== 1.0) {
+                mob.setScale(mobScale);
+            }
 
             const body = mob.body as Phaser.Physics.Arcade.Body;
             body.allowGravity = false;
 
             const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper' || normalizedType === 'lava-kappa' || normalizedType === 'shiro-onna';
-            if (is32x32) {
-                body.setSize(22, 22);
-                body.setOffset(5, 10);
-            } else {
-                body.setSize(24, 24);
-                body.setOffset(9, 6);
-            }
+            const baseW = is32x32 ? 22 : 24;
+            const baseH = is32x32 ? 22 : 24;
+            const baseOffX = is32x32 ? 5 : 9;
+            const baseOffY = is32x32 ? 10 : 6;
+            body.setSize(baseW, baseH);
+            body.setOffset(baseOffX, baseOffY);
 
             // 1 distance unit = 1 tile = 32 pixels starting strictly from object placed coordinates
             const travelDistancePx = distanceInTiles * 32;
@@ -873,7 +916,19 @@ export class EnemyManager {
     private handlePlayerFlyingMobCollision = (_playerObj: any, _mobObj: any) => {
         const mob = _mobObj as Phaser.Physics.Arcade.Sprite;
         if (!mob.active || !this.player.active) return;
-        this.player.die();
+
+        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+        const mBody = mob.body as Phaser.Physics.Arcade.Body;
+
+        const isFalling = pBody.velocity.y > 0 || (pBody.prev && pBody.y > pBody.prev.y);
+        const isAbove = pBody.bottom <= mBody.top + 16 || pBody.center.y < mBody.top + 8;
+
+        if (isFalling && isAbove) {
+            this.player.stompBounce(-380); 
+            this.killMob(mob, 'stomp');
+        } else {
+            this.player.die();
+        }
     }
 
     private killMob(mob: Phaser.Physics.Arcade.Sprite, _method: 'stomp' | 'shoot') {
@@ -896,6 +951,7 @@ export class EnemyManager {
         this.groundMobs.remove(mob);
         this.flyingMobs.remove(mob);
         const body = mob.body as Phaser.Physics.Arcade.Body;
+        body.allowGravity = true;
         body.checkCollision.none = true;
         body.setCollideWorldBounds(false);
         mob.anims.stop(); 
@@ -909,8 +965,9 @@ export class EnemyManager {
         this.soundManager?.playCoin();
         
         const text = `+${coinReward} COIN${coinReward > 1 ? 'S' : ''}`;
-        this.uiManager.showFloatingText(mob.x, mob.y - 10, text, '#FFD700');
-        this.uiManager.spawnParticles(mob.x, mob.y, 0xFFD700);
+        const mobScale = (mob.getData('scale') as number) || 1.0;
+        this.uiManager.showFloatingText(mob.x, mob.y - 10 * mobScale, text, '#FFD700');
+        this.uiManager.spawnParticles(mob.x, mob.y - 12 * mobScale, 0xFFD700);
 
         this.scene.time.delayedCall(1500, () => {
             if (mob.active) mob.destroy();
@@ -992,7 +1049,9 @@ export class EnemyManager {
     }
 
     private fireEnemyProjectile(mob: Phaser.Physics.Arcade.Sprite, boundZone?: Phaser.Geom.Rectangle, ignoreWalls: boolean = false) {
-        const bullet = this.enemyBullets.create(mob.x, mob.y - 12, 'enemy-bullet') as Phaser.Physics.Arcade.Sprite;
+        const mobScale = (mob.getData('scale') as number) || 1.0;
+        const bulletY = mob.y - 14 * mobScale;
+        const bullet = this.enemyBullets.create(mob.x, bulletY, 'enemy-bullet') as Phaser.Physics.Arcade.Sprite;
         bullet.setDepth(5);
         bullet.setOrigin(0.5, 0.5);
 
@@ -1010,17 +1069,17 @@ export class EnemyManager {
         const maxSpeed = (mob.getData('maxBulletSpeed') as number) || baseSpeed;
         const range = (mob.getData('range') as number) || 380;
 
-        const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y - 12, this.player.x, this.player.y);
+        const distToPlayer = Phaser.Math.Distance.Between(mob.x, bulletY, this.player.x, this.player.y);
         const distanceRatio = Phaser.Math.Clamp(distToPlayer / range, 0, 1);
         const finalSpeed = Phaser.Math.Linear(baseSpeed, maxSpeed, distanceRatio);
 
-        const angle = Phaser.Math.Angle.Between(mob.x, mob.y - 12, this.player.x, this.player.y);
+        const angle = Phaser.Math.Angle.Between(mob.x, bulletY, this.player.x, this.player.y);
         const vx = Math.cos(angle) * finalSpeed;
         const vy = Math.sin(angle) * finalSpeed;
 
         bullet.setVelocity(vx, vy);
         this.soundManager?.playEnemyShoot();
-        this.uiManager.spawnParticles(mob.x, mob.y - 12, 0xEF4444);
+        this.uiManager.spawnParticles(mob.x, bulletY, 0xEF4444);
 
         this.scene.time.delayedCall(3000, () => {
             if (bullet.active) bullet.destroy();
@@ -1128,15 +1187,16 @@ export class EnemyManager {
                 const mDiff = floorY - mob.y;
                 if (mDiff < -maxUpPx - 24 || mDiff > maxDownPx + 36) continue;
 
-                // 3. Anti-Clipping Bounding Box Clearance: ensure the entire 24x30 ghost standing box is empty air
+                // 3. Anti-Clipping Bounding Box Clearance: ensure the ghost standing box is empty air
+                const mobScale = (mob.getData('scale') as number) || 1.0;
                 const samplePoints = [
-                    { x: testX, y: floorY - 8 },
-                    { x: testX - 10, y: floorY - 8 },
-                    { x: testX + 10, y: floorY - 8 },
-                    { x: testX, y: floorY - 22 },
-                    { x: testX - 10, y: floorY - 22 },
-                    { x: testX + 10, y: floorY - 22 },
-                    { x: testX, y: floorY - 30 }
+                    { x: testX, y: floorY - 6 * mobScale },
+                    { x: testX - 10 * mobScale, y: floorY - 6 * mobScale },
+                    { x: testX + 10 * mobScale, y: floorY - 6 * mobScale },
+                    { x: testX, y: floorY - 18 * mobScale },
+                    { x: testX - 10 * mobScale, y: floorY - 18 * mobScale },
+                    { x: testX + 10 * mobScale, y: floorY - 18 * mobScale },
+                    { x: testX, y: floorY - 28 * mobScale }
                 ];
                 let isBlocked = false;
                 for (const pt of samplePoints) {
@@ -1157,13 +1217,13 @@ export class EnemyManager {
                 // 4. Hazard Avoidance: Ghost strictly avoids everything on the hazards layer (spikes, lava, death zones in empty air)
                 if (this.hazardsLayer) {
                     const hPoints = [
-                        { x: testX, y: floorY - 6 },
-                        { x: testX - 10, y: floorY - 6 },
-                        { x: testX + 10, y: floorY - 6 },
-                        { x: testX, y: floorY - 18 },
-                        { x: testX - 10, y: floorY - 18 },
-                        { x: testX + 10, y: floorY - 18 },
-                        { x: testX, y: floorY - 28 }
+                        { x: testX, y: floorY - 6 * mobScale },
+                        { x: testX - 10 * mobScale, y: floorY - 6 * mobScale },
+                        { x: testX + 10 * mobScale, y: floorY - 6 * mobScale },
+                        { x: testX, y: floorY - 18 * mobScale },
+                        { x: testX - 10 * mobScale, y: floorY - 18 * mobScale },
+                        { x: testX + 10 * mobScale, y: floorY - 18 * mobScale },
+                        { x: testX, y: floorY - 28 * mobScale }
                     ];
                     let isHazard = false;
                     for (const hp of hPoints) {
@@ -1205,11 +1265,12 @@ export class EnemyManager {
             const body = mob.body as Phaser.Physics.Arcade.Body;
             if (body) body.enable = false;
 
+            const mobScale = (mob.getData('scale') as number) || 1.0;
             this.scene.tweens.add({
                 targets: mob,
                 alpha: 0,
-                scaleX: 0.1,
-                scaleY: 1.5,
+                scaleX: 0.1 * mobScale,
+                scaleY: 1.5 * mobScale,
                 duration: 45,
                 ease: 'Linear',
                 onComplete: () => {
@@ -1217,13 +1278,13 @@ export class EnemyManager {
                     mob.setPosition(targetSpot!.x, targetSpot!.y);
                     mob.setVelocity(0, 0);
                     mob.setFlipX(this.player.x < mob.x);
-                    this.uiManager.spawnParticles(targetSpot!.x, targetSpot!.y - 14, 0xBAE6FD);
+                    this.uiManager.spawnParticles(targetSpot!.x, targetSpot!.y - 14 * mobScale, 0xBAE6FD);
 
                     this.scene.tweens.add({
                         targets: mob,
                         alpha: 0.92,
-                        scaleX: 1,
-                        scaleY: 1,
+                        scaleX: mobScale,
+                        scaleY: mobScale,
                         duration: 55,
                         ease: 'Linear',
                         onComplete: () => {
@@ -1319,8 +1380,9 @@ export class EnemyManager {
                 const lastShootTime = (mob.getData('lastShootTime') as number) || 0;
 
                 if (distToPlayer <= range && currentTime > lastShootTime + shootInterval) {
+                    const mobScale = (mob.getData('scale') as number) || 1.0;
                     const eyeX = mob.x;
-                    const eyeY = mob.y - 14;
+                    const eyeY = mob.y - 14 * mobScale;
                     const targetX = this.player.x;
                     const targetY = this.player.y - 8;
 
@@ -1408,8 +1470,9 @@ export class EnemyManager {
                 const lastShootTime = (mob.getData('lastShootTime') as number) || 0;
 
                 if (distToPlayer <= range && currentTime > lastShootTime + shootInterval) {
+                    const mobScale = (mob.getData('scale') as number) || 1.0;
                     const eyeX = mob.x;
-                    const eyeY = mob.y - 14;
+                    const eyeY = mob.y - 14 * mobScale;
                     const targetX = this.player.x;
                     const targetY = this.player.y - 8;
 
