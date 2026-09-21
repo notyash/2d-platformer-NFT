@@ -1,6 +1,7 @@
 // src/managers/UIManager.ts
 import Phaser from 'phaser';
 import { SoundManager } from './SoundManager';
+import { LeaderboardManager } from './LeaderboardManager';
 
 export interface MenuOption {
     id: string;
@@ -35,15 +36,15 @@ export class UIManager {
     private deathHighlight?: Phaser.GameObjects.Graphics;
 
     // Dynamic Menu Geometry Constants
-    private readonly pauseModalX = 640;
-    private readonly pauseModalY = 240;
+    private get pauseModalX(): number { return this.scene.scale.width / 2; }
+    private get pauseModalY(): number { return this.scene.scale.height / 2; }
     private currentStartBtnY = 182;
     private readonly pauseBtnGap = 42;
     private readonly pauseBtnWidth = 280;
     private readonly pauseBtnHeight = 34;
 
-    private readonly deathModalX = 640;
-    private readonly deathModalY = 240;
+    private get deathModalX(): number { return this.scene.scale.width / 2; }
+    private get deathModalY(): number { return this.scene.scale.height / 2; }
     private readonly deathBtnY = 292;
     private readonly deathBtnWidth = 320;
     private readonly deathBtnHeight = 44;
@@ -190,7 +191,7 @@ export class UIManager {
         }).setScrollFactor(0).setDepth(15);
 
         // Top Right [R+R] Restart Run Button
-        const restartBtnContainer = this.scene.add.container(1088, 24).setScrollFactor(0).setDepth(15);
+        const restartBtnContainer = this.scene.add.container(this.scene.scale.width - 192, 24).setScrollFactor(0).setDepth(15);
         const restartBtnBg = this.scene.add.rectangle(0, 0, 132, 28, 0x0f172a, 0.85)
             .setStrokeStyle(1.5, 0xf87171, 0.8)
             .setInteractive({ useHandCursor: true });
@@ -219,7 +220,7 @@ export class UIManager {
         restartBtnContainer.add([restartBtnBg, restartBtnText]);
 
         // Top Right [ESC] Menu Button
-        const menuBtnContainer = this.scene.add.container(1214, 24).setScrollFactor(0).setDepth(15);
+        const menuBtnContainer = this.scene.add.container(this.scene.scale.width - 66, 24).setScrollFactor(0).setDepth(15);
         const btnBg = this.scene.add.rectangle(0, 0, 100, 28, 0x0f172a, 0.85)
             .setStrokeStyle(1.5, 0x38bdf8, 0.8)
             .setInteractive({ useHandCursor: true });
@@ -317,7 +318,7 @@ export class UIManager {
         this.pauseContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
         // Dark dimming backdrop
-        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x000000, 0.75);
+        const backdrop = this.scene.add.rectangle(this.pauseModalX, this.pauseModalY, this.scene.scale.width, this.scene.scale.height, 0x000000, 0.75);
         this.pauseContainer.add(backdrop);
 
         // Construct dynamic menu options
@@ -331,7 +332,13 @@ export class UIManager {
         }
 
         this.menuOptions.push(
-            { id: 'restart', label: 'Restart Full Run', action: onRestart },
+            {
+                id: 'leaderboard',
+                label: '🏆 View Leaderboard',
+                action: () => {
+                    LeaderboardManager.getInstance().showLeaderboardModal(this.scene, this.soundManager);
+                }
+            },
             { 
                 id: 'sound', 
                 label: `Sound FX: ${this.soundEnabled ? 'ON' : 'OFF'}`, 
@@ -346,24 +353,17 @@ export class UIManager {
                     }
                 }
             },
-            { 
-                id: 'character', 
-                label: 'Change Character', 
-                action: () => {
-                    this.showFloatingText(640, 360, 'Character Select: Coming in Main Menu!', '#facc15');
-                    this.soundManager?.playMenuSelect();
-                } 
-            }
+            { id: 'restart', label: 'Restart Full Run', action: onRestart }
         );
 
         // Dynamic modal sizing & positioning
         const totalBtns = this.menuOptions.length;
         const modalWidth = 380;
-        const modalHeight = totalBtns === 5 ? 360 : 320;
-        const titleOffsetY = totalBtns === 5 ? -145 : -125;
-        const statsOffsetY = totalBtns === 5 ? -108 : -88;
+        const modalHeight = Math.max(320, 140 + totalBtns * this.pauseBtnGap);
+        const titleOffsetY = -modalHeight / 2 + 30;
+        const statsOffsetY = -modalHeight / 2 + 65;
         
-        this.currentStartBtnY = totalBtns === 5 ? 182 : 196;
+        this.currentStartBtnY = this.pauseModalY - modalHeight / 2 + 105;
 
         const modalBg = this.scene.add.rectangle(this.pauseModalX, this.pauseModalY, modalWidth, modalHeight, 0x0f172a, 0.95)
             .setStrokeStyle(2.5, 0x38bdf8, 0.9);
@@ -530,7 +530,7 @@ export class UIManager {
 
         this.deathContainer = this.scene.add.container(0, 0).setScrollFactor(0).setDepth(150);
 
-        const backdrop = this.scene.add.rectangle(640, 240, 1280, 480, 0x0a0000, 0.85);
+        const backdrop = this.scene.add.rectangle(this.deathModalX, this.deathModalY, this.scene.scale.width, this.scene.scale.height, 0x0a0000, 0.85);
         this.deathContainer.add(backdrop);
 
         const modalWidth = 420;

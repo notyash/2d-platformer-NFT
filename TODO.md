@@ -40,6 +40,16 @@
 ---
 
 ### ⏳ Immediate & Near-Term
+- [ ] **UI Polish & Visual Enhancements**:
+  - Modernize HUD design with crisp retro glassmorphism, responsive status bars, and vibrant equipment status cards.
+  - Refine pause menu and overlay layouts, improving button hover effects, typography, and spacing.
+  - Add micro-animations and smooth transition effects for banners (checkpoint notifications, respawn alerts, timer cues).
+- [ ] **Implement Bonsai Gripper Mob & Mechanics**:
+  - Implement full behavior tree, patrol paths, and custom animation states for the Bonsai Gripper enemy.
+  - Add unique combat / grasping interactions, hazard zones, and audio-visual cues.
+- [ ] **Better Use & Integration of All Collectibles**:
+  - Expand the utility of coins, gems, keys, totems, and powerups beyond basic counters.
+  - Integrate collectibles into progression mechanics (e.g., secret area unlock gates, ability upgrades, score multipliers, or temporary buffs).
 - [ ] **Configurable Difficulty Modes (Easy / Medium / Hardcore)**:
   - **Easy**: More frequent checkpoints, relaxed hazard intervals, and forgiving mob reaction times.
   - **Medium**: Standard checkpoint distribution and default gameplay balancing.
@@ -49,11 +59,13 @@
 
 ---
 
-### ?? Backend, Leaderboard & Web3 Verification
+### 🌐 Backend, Leaderboard & Web3 Verification
 - [ ] **Run Payload & Score Submission API**: Send run metrics (`timeElapsedMs`, `totalDeaths`, `coinsCollected`, `enemiesKilled`, `score`, timestamp) to the Rust/PostgreSQL backend upon stage completion.
 - [ ] **Global & Community Leaderboard**: Fetch and display top speedrun times, highest scores, and lowest death runs in-game / victory screen.
 - [ ] **Anti-Cheat Verification**: Generate input timeline/hash payloads to validate legitimate clears against API spoofing.
 - [ ] **Local Storage & Offline Caching**: Cache user personal bests, high scores, and audio preferences locally as a fallback.
+
+---
 
 ### 🎨 Gameplay Polish & World Expansion
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.

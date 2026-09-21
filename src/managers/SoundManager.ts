@@ -1,13 +1,16 @@
 // src/managers/SoundManager.ts
 import Phaser from 'phaser';
+import { SettingsManager } from './SettingsManager';
 
 export class SoundManager {
     private scene: Phaser.Scene;
     private ctx?: AudioContext;
     public isMuted: boolean = false;
+    private settingsManager: SettingsManager;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
+        this.settingsManager = SettingsManager.getInstance();
         this.initAudioContext();
     }
 
@@ -125,6 +128,9 @@ export class SoundManager {
     private playTone(startFreq: number, endFreq: number, type: OscillatorType, duration: number, volume: number) {
         try {
             if (!this.ctx) return;
+            const effectiveVol = volume * this.settingsManager.getEffectiveSfxVolume();
+            if (effectiveVol <= 0.001) return;
+
             if (this.ctx.state === 'suspended') {
                 this.ctx.resume();
             }
@@ -136,7 +142,7 @@ export class SoundManager {
             osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(Math.max(10, endFreq), this.ctx.currentTime + duration);
 
-            gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+            gain.gain.setValueAtTime(effectiveVol, this.ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
 
             osc.connect(gain);

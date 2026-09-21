@@ -7,6 +7,8 @@ import { CollectiblesManager } from '../managers/CollectiblesManager';
 import { UIManager } from '../managers/UIManager';
 import { InventoryManager } from '../managers/InventoryManager';
 import { SoundManager } from '../managers/SoundManager';
+import { SecurityManager } from '../managers/SecurityManager';
+import { LeaderboardManager } from '../managers/LeaderboardManager';
 
 export class MainStageScene extends Phaser.Scene {
     private player!: Player;
@@ -100,6 +102,7 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('idle-wind-l', 'assets/sprites/player/Main-Sprite-Idle-L.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('player-shoot', 'assets/sprites/player/Sprite-Shoot.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('player-jump-fall', 'assets/sprites/player/Main-Sprite-Jump-Fall.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-fall', 'assets/sprites/player/Main-Sprite-Falling.png', { frameWidth: 32, frameHeight: 32 });
         this.load.image('jump-r', 'assets/sprites/player/Melissa_Jump1_R.png');
         this.load.image('jump-l', 'assets/sprites/player/Melissa_Jump1_L.png');
         this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
@@ -113,14 +116,16 @@ export class MainStageScene extends Phaser.Scene {
         this.createLayers(map);
         this.createAnimations();
 
-        // Enforce clean nearest-neighbor pixel sampling on mob textures to prevent edge bleeding
-        const mobTextureKeys = [
+        // Enforce clean nearest-neighbor pixel sampling on textures to prevent edge bleeding
+        const cleanTextureKeys = [
+            'player-fall', 'player-jump-fall', 'walk-r', 'walk-l', 'idle-wind-r', 'idle-wind-l',
+            'idle-r', 'idle-l', 'player-shoot',
             'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster-l', 'pipe-monster-r',
             'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
             'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
             'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin'
         ];
-        mobTextureKeys.forEach(key => {
+        cleanTextureKeys.forEach(key => {
             if (this.textures.exists(key)) {
                 this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
             }
@@ -163,12 +168,9 @@ export class MainStageScene extends Phaser.Scene {
         this.inventoryManager = new InventoryManager(this, this.player, this.uiManager, this.soundManager);
         this.envManager = new EnvironmentManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
         this.collectiblesManager = new CollectiblesManager(this, this.player, this.uiManager, this.inventoryManager, this.soundManager);
-        this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.collectiblesManager, this.soundManager);
+        this.enemyManager = new EnemyManager(this, this.player, this.uiManager, this.collectiblesManager, this.soundManager, this.envManager);
 
-        // Setup Entities & Level Objects
-        this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
-        this.enemyManager.setupPipeMonsters(map, rawMapObjects);
-        
+        // Setup Level Environment Objects & Checkpoints
         this.envManager.setupCheckpoints(rawMapObjects);
         this.envManager.setupFakeGround(rawMapObjects);
         this.envManager.setupWindZones(rawMapObjects);
@@ -178,19 +180,37 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.setupJumpPads(rawMapObjects);
         this.envManager.setupFirebars(rawMapObjects);
         this.envManager.setupSmashTriggers(map);
+
+        // Setup Entities & Level Objects
+        this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
+        this.enemyManager.setupPipeMonsters(map, rawMapObjects);
+
+        // Ground mobs treat JumpPads and MovingPlatforms as solid obstacles to prevent getting stuck
+        if (this.envManager.jumpPads.length > 0) {
+            this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.jumpPads);
+        }
+        if (this.envManager.movingPlatforms.length > 0) {
+            this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.movingPlatforms);
+        }
         
         this.collectiblesManager.setupCollectibles(map);
+
+        // Security session start
+        SecurityManager.getInstance().startNewRun('stage1');
 
         // Checkpoint snapshot listener
         this.events.on('checkpoint-saved', () => {
             this.collectiblesManager.saveCheckpointSnapshot();
             this.enemyManager.saveCheckpointSnapshot();
             this.inventoryManager.saveCheckpointSnapshot();
+            SecurityManager.getInstance().recordEvent('CHECKPOINT', { x: this.player.x, y: this.player.y });
         });
 
         // Player death event: rollback state to active checkpoint snapshot
         this.events.on('player-death', () => {
             this.totalDeaths++;
+            SecurityManager.getInstance().recordDeath(this.totalDeaths);
+            SecurityManager.getInstance().recordEvent('DEATH', { x: this.player.x, y: this.player.y, deaths: this.totalDeaths });
             this.collectiblesManager.rollbackToCheckpoint();
             this.enemyManager.rollbackToCheckpoint();
             this.inventoryManager.rollbackToCheckpoint();
@@ -416,6 +436,7 @@ export class MainStageScene extends Phaser.Scene {
         this.inventoryManager.resetAll();
         this.envManager.resetAll();
         this.envManager.resetCheckpoints();
+        SecurityManager.getInstance().startNewRun('stage1');
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8', 1200);
         this.soundManager?.playPowerup();
@@ -481,6 +502,8 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'shoot-r-anim', frames: [{ key: 'player-shoot', frame: 3 }, { key: 'player-shoot', frame: 2 }], frameRate: 8, repeat: 0 });
         this.anims.create({ key: 'walk-r-anim', frames: this.anims.generateFrameNumbers('walk-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'walk-l-anim', frames: this.anims.generateFrameNumbers('walk-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'fall-l-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'fall-r-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 3, end: 5 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
         
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
@@ -548,5 +571,16 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.update(delta);
         this.inventoryManager.update();
         this.enemyManager.update(this.groundLayer, this.oneWayLayer, delta);
+        SecurityManager.getInstance().logPlayerPosition(this.player.x, this.player.y);
+    }
+
+    public onStageComplete() {
+        const payload = SecurityManager.getInstance().finishRun(
+            this.collectiblesManager.coinsCollected,
+            this.enemyManager.enemiesKilled,
+            this.totalDeaths
+        );
+        LeaderboardManager.getInstance().submitRun(payload, 'Speedy Onion');
+        LeaderboardManager.getInstance().showLeaderboardModal(this, this.soundManager);
     }
 }

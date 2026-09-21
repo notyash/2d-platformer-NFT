@@ -159,8 +159,8 @@ export class InventoryManager {
         const hasGun = Boolean(this.player.hasGun || this.gunCount > 0);
         const hasTotem = Boolean(this.player.hasTotem || this.totemCount > 0);
 
-        const centerX = 1280 / 2;
-        const posY = 442;
+        const centerX = this.scene.scale.width / 2;
+        const posY = this.scene.scale.height - 38;
         const badgeWidth = 148;
         const spacing = 12;
 

@@ -225,18 +225,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         if (!isGrounded) {
-            if (this.anims.isPlaying) this.anims.stop();
             if (body.velocity.y < 0) {
                 // Jumping / Rising (Frame 1: Left Jump, Frame 2: Right Jump)
+                if (this.anims.isPlaying) this.anims.stop();
                 const frame = this.facing === 'right' ? 2 : 1;
                 if (this.texture.key !== 'player-jump-fall' || this.frame.name !== String(frame)) {
                     this.setTexture('player-jump-fall', frame);
                 }
             } else {
-                // Falling / Descending (Frame 0: Left Fall, Frame 3: Right Fall)
-                const frame = this.facing === 'right' ? 3 : 0;
-                if (this.texture.key !== 'player-jump-fall' || this.frame.name !== String(frame)) {
-                    this.setTexture('player-jump-fall', frame);
+                // Falling / Descending using Main-Sprite-Falling.png
+                const fallAnimKey = this.facing === 'right' ? 'fall-r-anim' : 'fall-l-anim';
+                if (this.scene.anims.exists(fallAnimKey)) {
+                    if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallAnimKey) {
+                        this.anims.play(fallAnimKey, true);
+                    }
+                } else {
+                    if (this.anims.isPlaying) this.anims.stop();
+                    const frame = this.facing === 'right' ? 3 : 0;
+                    if (this.texture.key !== 'player-fall' || this.frame.name !== String(frame)) {
+                        this.setTexture('player-fall', frame);
+                    }
                 }
             }
             return;

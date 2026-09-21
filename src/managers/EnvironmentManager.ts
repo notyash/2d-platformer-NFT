@@ -41,6 +41,7 @@ export class EnvironmentManager {
     public firebars: Firebar[] = [];
     public smashTriggers: Phaser.GameObjects.Zone[] = [];
     public doorZones: Phaser.GameObjects.Zone[] = [];
+    public doorExitZones: Phaser.GameObjects.Zone[] = [];
     public disarmZones: Phaser.GameObjects.Zone[] = [];
     public windZones: WindZoneData[] = [];
     public fakeGrounds: FakeGroundData[] = [];
@@ -68,6 +69,62 @@ export class EnvironmentManager {
         return this.checkpoints.some(cp => cp.activated);
     }
 
+    public isPlayerInCheckpointZone(): boolean {
+        if (!this.player || !this.player.active) return false;
+        const pBounds = this.player.getBounds();
+        for (const cp of this.checkpoints) {
+            if (cp.zone && cp.zone.active) {
+                if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, cp.zone.getBounds())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public isPlayerInDoorZone(): boolean {
+        if (!this.player || !this.player.active) return false;
+        const pBounds = this.player.getBounds();
+        for (const dZone of this.doorZones) {
+            if (dZone && dZone.active && Phaser.Geom.Intersects.RectangleToRectangle(pBounds, dZone.getBounds())) {
+                return true;
+            }
+        }
+        for (const eZone of this.doorExitZones) {
+            if (eZone && eZone.active && Phaser.Geom.Intersects.RectangleToRectangle(pBounds, eZone.getBounds())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public isPlayerInSafeZone(): boolean {
+        return this.isPlayerInCheckpointZone() || this.isPlayerInDoorZone();
+    }
+
+    public isPositionInSafeZone(x: number, y: number): boolean {
+        for (const cp of this.checkpoints) {
+            if (cp.zone && cp.zone.active && cp.zone.getBounds().contains(x, y)) {
+                return true;
+            }
+        }
+        for (const dZone of this.doorZones) {
+            if (dZone && dZone.active && dZone.getBounds().contains(x, y)) {
+                return true;
+            }
+        }
+        for (const eZone of this.doorExitZones) {
+            if (eZone && eZone.active && eZone.getBounds().contains(x, y)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public isPositionInCheckpointZone(x: number, y: number): boolean {
+        return this.isPositionInSafeZone(x, y);
+    }
+
     setupCheckpoints(rawMapObjects: any[]) {
         this.checkpoints = [];
 
@@ -92,10 +149,10 @@ export class EnvironmentManager {
                                     (cleanName.includes('zone') || cleanName.includes('trigger') || obj.width);
 
             if (isCheckpointZone && !cleanName.endsWith('spawn')) {
-                const zX = obj.x + (obj.width ? obj.width / 2 : 16);
-                const zY = obj.y + (obj.height ? obj.height / 2 : 16);
                 const zW = obj.width || 32;
-                const zH = obj.height || 48;
+                const zH = (obj.height || 48) + 80;
+                const zX = obj.x + (obj.width ? obj.width / 2 : 16);
+                const zY = obj.y + (obj.height ? obj.height / 2 : 16) - 40;
 
                 let cpId: number | string = 1;
                 if (obj.properties) {
@@ -227,17 +284,27 @@ export class EnvironmentManager {
     }
 
     setupDoors(rawMapObjects: any[]) {
+        this.doorExitZones = [];
         const exitObject = rawMapObjects.find((obj: any) => obj.name === 'DoorExit');
         if (exitObject) {
             this.doorExitX = exitObject.x + (exitObject.width ? exitObject.width / 2 : 0);
             this.doorExitY = exitObject.y + (exitObject.height ? exitObject.height : 0);
+
+            const eW = exitObject.width || 32;
+            const eH = (exitObject.height || 48) + 64;
+            const eX = exitObject.x + (exitObject.width ? exitObject.width / 2 : 16);
+            const eY = exitObject.y + (exitObject.height ? exitObject.height / 2 : 24) - 32;
+            const exitZone = this.scene.add.zone(eX, eY, eW, eH);
+            this.scene.physics.add.existing(exitZone, true);
+            this.doorExitZones.push(exitZone);
         }
         
-        rawMapObjects.filter((obj: any) => obj.name === 'DoorZone').forEach((obj: any) => {
-            const zX = obj.x + (obj.width ? obj.width / 2 : 0);
-            const zY = obj.y + (obj.height ? obj.height / 2 : 0);
+        this.doorZones = [];
+        rawMapObjects.filter((obj: any) => obj.name === 'DoorZone' || obj.name === 'DoorEntrance').forEach((obj: any) => {
             const zW = obj.width || 32;
-            const zH = obj.height || 48;
+            const zH = (obj.height || 48) + 64;
+            const zX = obj.x + (obj.width ? obj.width / 2 : 16);
+            const zY = obj.y + (obj.height ? obj.height / 2 : 24) - 32;
             const zone = this.scene.add.zone(zX, zY, zW, zH);
             this.scene.physics.add.existing(zone, true); 
             this.doorZones.push(zone);

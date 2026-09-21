@@ -4,6 +4,7 @@ import { Player } from '../entities/Player';
 import { UIManager } from './UIManager';
 import { CollectiblesManager } from './CollectiblesManager';
 import { SoundManager } from './SoundManager';
+import { EnvironmentManager } from './EnvironmentManager';
 
 export class EnemyManager {
     private scene: Phaser.Scene;
@@ -11,6 +12,7 @@ export class EnemyManager {
     private uiManager: UIManager;
     private collectiblesManager?: CollectiblesManager;
     private soundManager?: SoundManager;
+    private envManager?: EnvironmentManager;
 
     public groundMobs!: Phaser.Physics.Arcade.Group;
     public flyingMobs!: Phaser.Physics.Arcade.Group;
@@ -38,18 +40,24 @@ export class EnemyManager {
         player: Player, 
         uiManager: UIManager, 
         collectiblesManager?: CollectiblesManager,
-        soundManager?: SoundManager
+        soundManager?: SoundManager,
+        envManager?: EnvironmentManager
     ) {
         this.scene = scene;
         this.player = player;
         this.uiManager = uiManager;
         this.collectiblesManager = collectiblesManager;
         this.soundManager = soundManager;
+        this.envManager = envManager;
 
         this.groundMobs = this.scene.physics.add.group();
         this.flyingMobs = this.scene.physics.add.group({ allowGravity: false });
         this.pipeMonsters = this.scene.physics.add.group({ allowGravity: false, immovable: true });
         this.enemyBullets = this.scene.physics.add.group({ allowGravity: false });
+    }
+
+    public setEnvironmentManager(envManager: EnvironmentManager) {
+        this.envManager = envManager;
     }
 
     public saveCheckpointSnapshot() {
@@ -465,6 +473,27 @@ export class EnemyManager {
                 }
             }
 
+            const parseRangeVal = (val: any): number | undefined => {
+                if (val === undefined || val === null || val === '') return undefined;
+                const num = Number(val);
+                if (isNaN(num)) return undefined;
+                return Math.abs(num) <= 50 ? Math.abs(num) * 32 : Math.abs(num);
+            };
+
+            let rangeLeft = parseRangeVal(this.getProp(obj, ['rangeleft', 'range_left', 'leftrange', 'left_range', 'minx', '-x', 'negativex', 'negx']));
+            let rangeRight = parseRangeVal(this.getProp(obj, ['rangeright', 'range_right', 'rightrange', 'right_range', 'maxx', '+x', 'positivex', 'posx']));
+            let rangeUp = parseRangeVal(this.getProp(obj, ['rangeup', 'range_up', 'uprange', 'up_range', 'miny', '-y', 'maxup', 'negativey', 'negy', 'up']));
+            let rangeDown = parseRangeVal(this.getProp(obj, ['rangedown', 'range_down', 'downrange', 'down_range', 'maxy', '+y', 'maxdown', 'positivey', 'posy', 'down']));
+
+            if (horizontalRange !== undefined) {
+                if (rangeLeft === undefined) rangeLeft = horizontalRange;
+                if (rangeRight === undefined) rangeRight = horizontalRange;
+            }
+            if (verticalRange !== undefined) {
+                if (rangeUp === undefined) rangeUp = verticalRange;
+                if (rangeDown === undefined) rangeDown = verticalRange;
+            }
+
             const owProp = this.getProp(obj, ['allowoneway', 'oneway']);
             if (owProp !== undefined) {
                 allowOneWay = Boolean(owProp);
@@ -506,10 +535,12 @@ export class EnemyManager {
             
             const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper' || normalizedType === 'lava-kappa' || normalizedType === 'shiro-onna';
             const body = mob.body as Phaser.Physics.Arcade.Body;
+            const texW = is32x32 ? 32 : 42;
+            const texH = is32x32 ? 32 : 30;
             const baseW = is32x32 ? 22 : 24;
             const baseH = is32x32 ? 22 : 24;
-            const baseOffX = is32x32 ? 5 : 9;
-            const baseOffY = is32x32 ? 10 : 6;
+            const baseOffX = (texW - baseW) / 2;
+            const baseOffY = texH - baseH;
             body.setSize(baseW, baseH);
             body.setOffset(baseOffX, baseOffY);
             body.setCollideWorldBounds(true);
@@ -525,6 +556,10 @@ export class EnemyManager {
             if (horizontalRange !== undefined) {
                 mob.setData('horizontalRange', horizontalRange);
             }
+            mob.setData('rangeLeft', rangeLeft);
+            mob.setData('rangeRight', rangeRight);
+            mob.setData('rangeUp', rangeUp);
+            mob.setData('rangeDown', rangeDown);
             mob.setData('direction', initialDir);
             mob.setData('speed', mobSpeed); 
             mob.setData('stationary', isStationary);
@@ -709,7 +744,7 @@ export class EnemyManager {
             const baseW = is32x32 ? 22 : 24;
             const baseH = is32x32 ? 22 : 24;
             const baseOffX = is32x32 ? 5 : 9;
-            const baseOffY = is32x32 ? 10 : 6;
+            const baseOffY = normalizedType === 'sandal' ? 9 : (is32x32 ? 10 : 6);
             body.setSize(baseW, baseH);
             body.setOffset(baseOffX, baseOffY);
 
@@ -1107,10 +1142,31 @@ export class EnemyManager {
         oneWayLayer: Phaser.Tilemaps.TilemapLayer
     ) {
         if (!mob.active || !this.player.active) return;
+        if (this.envManager && this.envManager.isPlayerInSafeZone()) return;
         const isTeleporting = mob.getData('isTeleporting') as boolean;
         if (isTeleporting) return;
 
-        const teleportRange = (mob.getData('teleportRange') as number) || 480;
+        let teleportRange = (mob.getData('teleportRange') as number) || 480;
+        const rangeLeft = mob.getData('rangeLeft') as number | undefined;
+        const rangeRight = mob.getData('rangeRight') as number | undefined;
+        const rangeUp = mob.getData('rangeUp') as number | undefined;
+        const rangeDown = mob.getData('rangeDown') as number | undefined;
+        const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
+        const spawnY = (mob.getData('spawnY') as number) ?? mob.y;
+
+        const maxHRange = Math.max(rangeLeft || 0, rangeRight || 0);
+        if (maxHRange > 0) {
+            teleportRange = Math.max(teleportRange, maxHRange + 64);
+        }
+
+        // Horizontal axis detection checks (-x and +x)
+        if (this.player.x < spawnX && rangeLeft !== undefined && (spawnX - this.player.x) > rangeLeft + 48) return;
+        if (this.player.x > spawnX && rangeRight !== undefined && (this.player.x - spawnX) > rangeRight + 48) return;
+
+        // Vertical axis detection checks (-y and +y)
+        if (this.player.y < spawnY && rangeUp !== undefined && (spawnY - this.player.y) > rangeUp + 48) return;
+        if (this.player.y > spawnY && rangeDown !== undefined && (this.player.y - spawnY) > rangeDown + 48) return;
+
         const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
         if (distToPlayer > teleportRange) return;
 
@@ -1138,15 +1194,13 @@ export class EnemyManager {
         const projectedLandingX = this.player.x + (pBody.velocity.x * 0.35);
 
         // Custom Teleportation Constraints
-        const horizontalRange = mob.getData('horizontalRange') as number | undefined;
-        const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
         const verticalTeleport = mob.getData('verticalTeleport') !== false;
         const verticalRange = (mob.getData('verticalRange') as number) || 96;
         const verticalMode = (mob.getData('verticalMode') as string) || 'any';
         const allowOneWay = mob.getData('allowOneWay') !== false;
 
-        let maxUpPx = verticalTeleport ? verticalRange : 0;
-        let maxDownPx = verticalTeleport ? verticalRange : 0;
+        let maxUpPx = rangeUp ?? (verticalTeleport ? verticalRange : 0);
+        let maxDownPx = rangeDown ?? (verticalTeleport ? verticalRange : 0);
 
         if (verticalMode === 'up') maxDownPx = 0;
         else if (verticalMode === 'down') maxUpPx = 0;
@@ -1182,8 +1236,9 @@ export class EnemyManager {
             for (const xOff of candidateXOffsets) {
                 const testX = this.player.x + xOff;
 
-                // 1. Horizontal Range check from original spawn position
-                if (horizontalRange !== undefined && Math.abs(testX - spawnX) > horizontalRange) continue;
+                // 1. Horizontal Range checks (-x and +x) from original spawn position
+                if (testX < spawnX && rangeLeft !== undefined && (spawnX - testX) > rangeLeft) continue;
+                if (testX > spawnX && rangeRight !== undefined && (testX - spawnX) > rangeRight) continue;
 
                 const gTile = groundLayer.getTileAtWorldXY(testX, testY);
                 const owTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(testX, testY) : null;
@@ -1194,7 +1249,10 @@ export class EnemyManager {
 
                 const floorY = Math.floor(testY / 32) * 32; // Top surface of floor tile in world px
 
-                // 2. Vertical Distance Checks relative to Player and Mob
+                // 2. Vertical Distance Checks relative to Spawn (-y and +y), Player, and Mob
+                if (floorY < spawnY && rangeUp !== undefined && (spawnY - floorY) > rangeUp + 24) continue;
+                if (floorY > spawnY && rangeDown !== undefined && (floorY - spawnY) > rangeDown + 24) continue;
+
                 const pDiff = floorY - this.player.y;
                 if (pDiff < -maxUpPx - 24 || pDiff > maxDownPx + 36) continue;
 
@@ -1257,7 +1315,9 @@ export class EnemyManager {
                 const requiredBuffer = (isPlayerInAir && isFloorUnderPlayer) ? 50 : 38;
                 if (currentDistX < requiredBuffer || projectedDistX < requiredBuffer) continue;
 
-                // 6. World Bounds Check
+                // 6. World Bounds & Safe Zone Guard Check
+                if (this.envManager && this.envManager.isPositionInSafeZone(testX, floorY)) continue;
+
                 const withinBounds = testX > 32 && testX < this.scene.physics.world.bounds.width - 32 &&
                                      floorY > 32 && floorY < this.scene.physics.world.bounds.height - 16;
                 if (!withinBounds) continue;
@@ -1347,7 +1407,40 @@ export class EnemyManager {
 
             if (mobType === 'shiro-onna') {
                 mob.setVelocityX(0);
-                if (isNearCamera) {
+                const isPlayerSafe = this.envManager ? this.envManager.isPlayerInSafeZone() : false;
+                const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
+                const spawnY = (mob.getData('spawnY') as number) ?? mob.y;
+                const mobScale = (mob.getData('scale') as number) || 1.0;
+                const initialDir = (mob.getData('direction') as number) || 1;
+
+                if (isPlayerSafe) {
+                    // Stop any ongoing teleport tween and return Shiro Onna to original spawn location
+                    const isTeleporting = mob.getData('isTeleporting') as boolean;
+                    if (isTeleporting) {
+                        this.scene.tweens.killTweensOf(mob);
+                        mob.setData('isTeleporting', false);
+                    }
+
+                    const distFromSpawn = Phaser.Math.Distance.Between(mob.x, mob.y, spawnX, spawnY);
+                    if (distFromSpawn > 4) {
+                        if (isNearCamera && mob.alpha > 0.1) {
+                            this.uiManager.spawnParticles(mob.x, mob.y - 14 * mobScale, 0xBAE6FD);
+                        }
+                        mob.setPosition(spawnX, spawnY);
+                        mob.setVelocity(0, 0);
+                        if (isNearCamera) {
+                            this.uiManager.spawnParticles(spawnX, spawnY - 14 * mobScale, 0xBAE6FD);
+                        }
+                    }
+
+                    mob.setAlpha(0.92);
+                    mob.setScale(mobScale);
+                    mob.setFlipX(initialDir === -1);
+                    if (body) {
+                        body.enable = true;
+                        body.setVelocity(0, 0);
+                    }
+                } else if (isNearCamera) {
                     mob.setFlipX(this.player.x < mob.x);
                     this.tryTeleportShiroOnna(mob, currentTime, groundLayer, oneWayLayer);
                 }
@@ -1373,20 +1466,60 @@ export class EnemyManager {
                     }
                 }
             } else {
-                if (body.blocked.left) {
-                    dir = 1;
-                } else if (body.blocked.right) {
-                    dir = -1;
-                } else if (body.blocked.down && isNearCamera) {
-                    const checkX = body.center.x + (dir * (body.halfWidth + 4));
-                    const checkY = body.bottom + 2;
+                // Moving Ground Mob (Patrol)
+                const lastTurnTime = (mob.getData('lastTurnTime') as number) || 0;
+                const canTurn = (currentTime - lastTurnTime > 200);
+
+                if (body.blocked.left && body.blocked.right) {
+                    // Wedged in narrow space: stop moving to prevent infinite vibrating
+                    mob.setVelocityX(0);
+                } else if (body.blocked.left || body.touching.left) {
+                    if (canTurn && dir !== 1) {
+                        dir = 1;
+                        mob.setData('lastTurnTime', currentTime);
+                    }
+                } else if (body.blocked.right || body.touching.right) {
+                    if (canTurn && dir !== -1) {
+                        dir = -1;
+                        mob.setData('lastTurnTime', currentTime);
+                    }
+                } else if (body.blocked.down && isNearCamera && canTurn) {
+                    // Lookahead: check floor and hazards ahead
+                    const lookDist = Math.max(10, body.halfWidth * 0.7);
+                    const checkX = body.center.x + (dir * lookDist);
+                    const checkY = body.bottom + 4;
                     
                     const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
                     const oneWayTile = oneWayLayer.getTileAtWorldXY(checkX, checkY);
                     const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
                     const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1);
                     
-                    if (!hasFloor) dir *= -1; 
+                    // Check if floor or body height ahead contains a hazard tile
+                    let isFloorHazard = false;
+                    let isWallHazard = false;
+                    if (this.hazardsLayer) {
+                        const hFloorTile = this.hazardsLayer.getTileAtWorldXY(checkX, checkY);
+                        if (hFloorTile && hFloorTile.index !== -1) isFloorHazard = true;
+
+                        const hWallTile = this.hazardsLayer.getTileAtWorldXY(checkX, body.center.y);
+                        if (hWallTile && hWallTile.index !== -1) isWallHazard = true;
+                    }
+
+                    if (!hasFloor || isFloorHazard || isWallHazard) {
+                        // Check opposite side floor to detect isolated 1-tile ledges
+                        const oppCheckX = body.center.x - (dir * lookDist);
+                        const oppTile = groundLayer.getTileAtWorldXY(oppCheckX, checkY);
+                        const oppOneWay = oneWayLayer.getTileAtWorldXY(oppCheckX, checkY);
+                        const oppSmash = this.smashLayer ? this.smashLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
+                        const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1);
+
+                        if (!oppHasFloor) {
+                            mob.setVelocityX(0);
+                        } else {
+                            dir *= -1;
+                            mob.setData('lastTurnTime', currentTime);
+                        }
+                    }
                 }
                 
                 mob.setData('direction', dir);
@@ -1420,7 +1553,9 @@ export class EnemyManager {
                         mob.setData('lastShootTime', currentTime);
                         
                         const aimDir = this.player.x < mob.x ? -1 : 1;
-                        mob.setData('direction', aimDir);
+                        if (isStationary || speed === 0) {
+                            mob.setData('direction', aimDir);
+                        }
 
                         this.scene.tweens.add({
                             targets: mob,
