@@ -42,25 +42,26 @@ export class MainStageScene extends Phaser.Scene {
     preload() {
         this.load.image('levelobjects', 'assets/tilesets/LevelObjectTiles.png');
         this.load.image('landtiles', 'assets/tilesets/LandTiles_32_32.png');
-        this.load.image('sky', 'assets/tilesets/sky.png');
-        this.load.image('clouds1', 'assets/tilesets/clouds1.png');
-        this.load.image('smallTree', 'assets/tilesets/smallTree.png');
-        this.load.image('largeTree', 'assets/tilesets/largeTree.png');
-        this.load.image('grass', 'assets/tilesets/grass.png');
-        this.load.image('cloud2', 'assets/tilesets/cloud2.png');
+        this.load.image('sky', 'assets/sprites/background/sky.png');
+        this.load.image('clouds1', 'assets/sprites/background/clouds1.png');
+        this.load.image('smallTree', 'assets/sprites/background/smallTree.png');
+        this.load.image('largeTree', 'assets/sprites/background/largeTree.png');
+        this.load.image('grass', 'assets/sprites/background/grass.png');
+        this.load.image('cloud2', 'assets/sprites/background/cloud2.png');
         this.load.tilemapTiledJSON('stage1', 'assets/tilemaps/harder-main-stage.json');
 
         // Tileset overlays
-        this.load.image('plain-ground', 'assets/tilesets/plainGround.png');
+        this.load.image('plain-ground', 'assets/sprites/background/plainGround.png');
 
-        this.load.image('moving-platform-img', 'assets/sprites/moving-platform.png');
+        this.load.image('moving-platform-img', 'assets/sprites/misc/moving-platform.png');
         this.load.image('pipe-monster-l', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
         this.load.image('pipe-monster-r', 'assets/sprites/monsters/Devil_Red_Stand_R.png');
-        this.load.image('jump-pad-img', 'assets/sprites/jump-pad.png');
+        this.load.image('jump-pad-img', 'assets/sprites/misc/jump-pad.png');
         this.load.spritesheet('coin', 'assets/sprites/collectibles/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
         
         // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
+        this.load.spritesheet('enemy-fireball', 'assets/sprites/misc/fireball sprite.png', { frameWidth: 32, frameHeight: 32 });
 
         // Mob Sprites (Bug, Devil, Hedgehog, Bonsai Gripper, Pumpkin Bat, Sandal)
         this.load.spritesheet('mob-bug-green-l', 'assets/sprites/monsters/Bug_42x30_Green_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
@@ -485,6 +486,10 @@ export class MainStageScene extends Phaser.Scene {
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });
 
+        // Enemy Shooter Fireball (32x32: 0..3 Left, 4..7 Right)
+        this.anims.create({ key: 'enemy-fireball-l', frames: this.anims.generateFrameNumbers('enemy-fireball', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'enemy-fireball-r', frames: this.anims.generateFrameNumbers('enemy-fireball', { start: 4, end: 7 }), frameRate: 10, repeat: -1 });
+
         // Bug (Green & Yellow) - 42x30 (4 frames)
         this.anims.create({ key: 'mob-bug-green-walk-l', frames: this.anims.generateFrameNumbers('mob-bug-green-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'mob-bug-green-walk-r', frames: this.anims.generateFrameNumbers('mob-bug-green-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
@@ -524,7 +529,7 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'mob-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
     }
 
-    update() {
+    update(_time: number, delta: number) {
         if (this.isGamePaused) {
             this.uiManager.updatePauseMenu();
             return;
@@ -540,8 +545,8 @@ export class MainStageScene extends Phaser.Scene {
         );
 
         this.player.update();
-        this.envManager.update();
+        this.envManager.update(delta);
         this.inventoryManager.update();
-        this.enemyManager.update(this.groundLayer, this.oneWayLayer);
+        this.enemyManager.update(this.groundLayer, this.oneWayLayer, delta);
     }
 }

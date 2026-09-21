@@ -366,19 +366,47 @@ export class EnvironmentManager {
         rawFirebars.forEach((obj: any) => {
             const pivotX = obj.x! + (obj.width || 0) / 2;
             const pivotY = obj.y! + (obj.height || 0) / 2;
-            let length = 5, speed = 0.05; 
+            let length = 5;
+            let rawSpeed = 0.05;
+            let startAngleRad = 0;
             
+            // Check Tiled properties (both array and object representations)
             if (obj.properties) {
-                const lenProp = obj.properties.find((p: any) => p.name.toLowerCase() === 'length');
-                if (lenProp) length = Number(lenProp.value);
-                const speedProp = obj.properties.find((p: any) => p.name.toLowerCase() === 'speed');
-                if (speedProp) speed = Number(speedProp.value);
+                if (Array.isArray(obj.properties)) {
+                    const lenProp = obj.properties.find((p: any) => p && p.name && p.name.toLowerCase() === 'length');
+                    if (lenProp && lenProp.value !== undefined) length = Number(lenProp.value);
+                    
+                    const speedProp = obj.properties.find((p: any) => p && p.name && (p.name.toLowerCase() === 'speed' || p.name.toLowerCase() === 'rotationspeed'));
+                    if (speedProp && speedProp.value !== undefined) rawSpeed = Number(speedProp.value);
+
+                    const angleProp = obj.properties.find((p: any) => p && p.name && (p.name.toLowerCase() === 'startangle' || p.name.toLowerCase() === 'angle' || p.name.toLowerCase() === 'initialangle'));
+                    if (angleProp && angleProp.value !== undefined) {
+                        const val = Number(angleProp.value);
+                        startAngleRad = val > (2 * Math.PI) ? Phaser.Math.DegToRad(val) : val;
+                    }
+                } else if (typeof obj.properties === 'object') {
+                    if (obj.properties.length !== undefined) length = Number(obj.properties.length);
+                    if (obj.properties.speed !== undefined) rawSpeed = Number(obj.properties.speed);
+                    if (obj.properties.startAngle !== undefined || obj.properties.angle !== undefined) {
+                        const val = Number(obj.properties.startAngle ?? obj.properties.angle);
+                        startAngleRad = val > (2 * Math.PI) ? Phaser.Math.DegToRad(val) : val;
+                    }
+                }
             }
+
+            // Normalize Speed:
+            // If user enters a multiplier (e.g. 1.0 = normal, 2.0 = double fast, -1.0 = reverse): scale by 0.05 baseline
+            // If user enters direct radians step (e.g. 0.05, 0.08, 0.025, -0.05): use directly
+            const speed = Math.abs(rawSpeed) >= 0.5 ? rawSpeed * 0.05 : rawSpeed;
             
             const segments: Phaser.GameObjects.Sprite[] = [], distances: number[] = [];
             for (let i = 0; i < length; i++) {
                 const dist = (i + 1) * 16; 
-                const segment = this.scene.physics.add.sprite(pivotX + dist, pivotY, 'fireball');
+                const segment = this.scene.physics.add.sprite(
+                    pivotX + Math.cos(startAngleRad) * dist, 
+                    pivotY + Math.sin(startAngleRad) * dist, 
+                    'fireball'
+                );
                 segment.setDepth(5);
                 
                 const segBody = segment.body as Phaser.Physics.Arcade.Body;
@@ -389,7 +417,7 @@ export class EnvironmentManager {
                 
                 this.scene.physics.add.overlap(this.player, segment, () => this.player.die());
             }
-            this.firebars.push({ pivotX, pivotY, angle: 0, speed, segments, distances });
+            this.firebars.push({ pivotX, pivotY, angle: startAngleRad, speed, segments, distances });
         });
     }
 
@@ -403,14 +431,22 @@ export class EnvironmentManager {
         }
     }
 
-    update() {
+    update(delta: number = 16.667) {
+        const deltaFactor = Math.min(delta / 16.6667, 3.0); // Normalized 60Hz delta scale
+        const cam = this.scene.cameras.main;
+        const camLeft = cam.scrollX - 200;
+        const camRight = cam.scrollX + cam.width + 200;
+
         this.firebars.forEach(bar => {
-            bar.angle += bar.speed; 
-            for (let i = 0; i < bar.segments.length; i++) {
-                bar.segments[i].setPosition(
-                    bar.pivotX + Math.cos(bar.angle) * bar.distances[i],
-                    bar.pivotY + Math.sin(bar.angle) * bar.distances[i]
-                );
+            bar.angle += bar.speed * deltaFactor;
+            // Only update segment positions if near the camera view
+            if (bar.pivotX >= camLeft && bar.pivotX <= camRight) {
+                for (let i = 0; i < bar.segments.length; i++) {
+                    bar.segments[i].setPosition(
+                        bar.pivotX + Math.cos(bar.angle) * bar.distances[i],
+                        bar.pivotY + Math.sin(bar.angle) * bar.distances[i]
+                    );
+                }
             }
         });
 

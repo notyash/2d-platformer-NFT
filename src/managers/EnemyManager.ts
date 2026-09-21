@@ -31,6 +31,7 @@ export class EnemyManager {
     private hazardsLayer?: Phaser.Tilemaps.TilemapLayer;
     private smashLayer?: Phaser.Tilemaps.TilemapLayer;
     private map!: Phaser.Tilemaps.Tilemap;
+    private losLine = new Phaser.Geom.Line();
 
     constructor(
         scene: Phaser.Scene, 
@@ -1031,8 +1032,8 @@ export class EnemyManager {
     private hasLineOfSight(mobX: number, mobY: number, targetX: number, targetY: number): boolean {
         if (!this.groundLayer) return true;
         
-        const line = new Phaser.Geom.Line(mobX, mobY, targetX, targetY);
-        const tiles = this.groundLayer.getTilesWithinShape(line);
+        this.losLine.setTo(mobX, mobY, targetX, targetY);
+        const tiles = this.groundLayer.getTilesWithinShape(this.losLine);
 
         for (const tile of tiles) {
             if (tile && tile.index !== -1) {
@@ -1040,7 +1041,7 @@ export class EnemyManager {
             }
         }
         if (this.smashLayer) {
-            const smashTiles = this.smashLayer.getTilesWithinShape(line);
+            const smashTiles = this.smashLayer.getTilesWithinShape(this.losLine);
             for (const tile of smashTiles) {
                 if (tile && tile.index !== -1) return false;
             }
@@ -1050,14 +1051,35 @@ export class EnemyManager {
 
     private fireEnemyProjectile(mob: Phaser.Physics.Arcade.Sprite, boundZone?: Phaser.Geom.Rectangle, ignoreWalls: boolean = false) {
         const mobScale = (mob.getData('scale') as number) || 1.0;
-        const bulletY = mob.y - 14 * mobScale;
-        const bullet = this.enemyBullets.create(mob.x, bulletY, 'enemy-bullet') as Phaser.Physics.Arcade.Sprite;
+        const isFacingRight = (this.player.x >= mob.x);
+
+        // Spawn projectile at the shooter mob's mouth/beak (offset from center-feet origin)
+        const mouthX = mob.x + (isFacingRight ? 9 : -9) * mobScale;
+        const mouthY = mob.y - 24 * mobScale;
+
+        const baseSpeed = (mob.getData('bulletSpeed') as number) || 220;
+        const maxSpeed = (mob.getData('maxBulletSpeed') as number) || baseSpeed;
+        const range = (mob.getData('range') as number) || 380;
+
+        const distToPlayer = Phaser.Math.Distance.Between(mouthX, mouthY, this.player.x, this.player.y);
+        const distanceRatio = Phaser.Math.Clamp(distToPlayer / range, 0, 1);
+        const finalSpeed = Phaser.Math.Linear(baseSpeed, maxSpeed, distanceRatio);
+
+        const angle = Phaser.Math.Angle.Between(mouthX, mouthY, this.player.x, this.player.y);
+        const vx = Math.cos(angle) * finalSpeed;
+        const vy = Math.sin(angle) * finalSpeed;
+
+        const animKey = isFacingRight ? 'enemy-fireball-r' : 'enemy-fireball-l';
+        const spriteRotation = isFacingRight ? angle : (angle >= 0 ? angle - Math.PI : angle + Math.PI);
+
+        const bullet = this.enemyBullets.create(mouthX, mouthY, 'enemy-fireball') as Phaser.Physics.Arcade.Sprite;
         bullet.setDepth(5);
         bullet.setOrigin(0.5, 0.5);
+        bullet.setRotation(spriteRotation);
 
         const body = bullet.body as Phaser.Physics.Arcade.Body;
-        body.setSize(10, 10);
-        body.setOffset(3, 3);
+        body.setSize(16, 16);
+        body.setOffset(8, 8);
         body.allowGravity = false;
 
         if (boundZone) {
@@ -1065,21 +1087,13 @@ export class EnemyManager {
         }
         bullet.setData('ignoreWalls', ignoreWalls);
 
-        const baseSpeed = (mob.getData('bulletSpeed') as number) || 220;
-        const maxSpeed = (mob.getData('maxBulletSpeed') as number) || baseSpeed;
-        const range = (mob.getData('range') as number) || 380;
-
-        const distToPlayer = Phaser.Math.Distance.Between(mob.x, bulletY, this.player.x, this.player.y);
-        const distanceRatio = Phaser.Math.Clamp(distToPlayer / range, 0, 1);
-        const finalSpeed = Phaser.Math.Linear(baseSpeed, maxSpeed, distanceRatio);
-
-        const angle = Phaser.Math.Angle.Between(mob.x, bulletY, this.player.x, this.player.y);
-        const vx = Math.cos(angle) * finalSpeed;
-        const vy = Math.sin(angle) * finalSpeed;
+        if (this.scene.anims.exists(animKey)) {
+            bullet.play(animKey);
+        }
 
         bullet.setVelocity(vx, vy);
         this.soundManager?.playEnemyShoot();
-        this.uiManager.spawnParticles(mob.x, bulletY, 0xEF4444);
+        this.uiManager.spawnParticles(mouthX, mouthY, 0xEF4444);
 
         this.scene.time.delayedCall(3000, () => {
             if (bullet.active) bullet.destroy();
@@ -1299,8 +1313,13 @@ export class EnemyManager {
         }
     }
 
-    update(groundLayer: Phaser.Tilemaps.TilemapLayer, oneWayLayer: Phaser.Tilemaps.TilemapLayer) {
+    update(groundLayer: Phaser.Tilemaps.TilemapLayer, oneWayLayer: Phaser.Tilemaps.TilemapLayer, _delta: number = 16.667) {
         const currentTime = this.scene.time.now;
+        const cam = this.scene.cameras.main;
+        const activeLeft = cam.scrollX - 400;
+        const activeRight = cam.scrollX + cam.width + 400;
+        const activeTop = cam.scrollY - 300;
+        const activeBottom = cam.scrollY + cam.height + 300;
 
         this.enemyBullets.getChildren().forEach(child => {
             const bullet = child as Phaser.Physics.Arcade.Sprite;
@@ -1315,6 +1334,8 @@ export class EnemyManager {
         this.groundMobs.getChildren().forEach(child => {
             const mob = child as Phaser.Physics.Arcade.Sprite;
             if (!mob.active) return;
+
+            const isNearCamera = mob.x >= activeLeft && mob.x <= activeRight && mob.y >= activeTop && mob.y <= activeBottom;
             
             let dir = mob.getData('direction') as number;
             const speed = mob.getData('speed') as number;
@@ -1326,33 +1347,37 @@ export class EnemyManager {
 
             if (mobType === 'shiro-onna') {
                 mob.setVelocityX(0);
-                mob.setFlipX(this.player.x < mob.x);
-                this.tryTeleportShiroOnna(mob, currentTime, groundLayer, oneWayLayer);
+                if (isNearCamera) {
+                    mob.setFlipX(this.player.x < mob.x);
+                    this.tryTeleportShiroOnna(mob, currentTime, groundLayer, oneWayLayer);
+                }
             } else if (isStationary || speed === 0) {
                 mob.setVelocityX(0);
 
-                if (canShoot) {
-                    const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
-                    const range = (mob.getData('range') as number) || 380;
-                    if (distToPlayer <= range) {
-                        dir = this.player.x < mob.x ? -1 : 1;
-                        mob.setData('direction', dir);
+                if (isNearCamera) {
+                    if (canShoot) {
+                        const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
+                        const range = (mob.getData('range') as number) || 380;
+                        if (distToPlayer <= range) {
+                            dir = this.player.x < mob.x ? -1 : 1;
+                            mob.setData('direction', dir);
+                        }
                     }
-                }
 
-                const texInfo = this.getMobTextureAndFrame(mobType, dir);
-                if (mob.anims.isPlaying) {
-                    mob.anims.stop();
-                }
-                if (mob.texture.key !== texInfo.key || (texInfo.frame !== undefined && mob.frame.name !== String(texInfo.frame))) {
-                    mob.setTexture(texInfo.key, texInfo.frame);
+                    const texInfo = this.getMobTextureAndFrame(mobType, dir);
+                    if (mob.anims.isPlaying) {
+                        mob.anims.stop();
+                    }
+                    if (mob.texture.key !== texInfo.key || (texInfo.frame !== undefined && mob.frame.name !== String(texInfo.frame))) {
+                        mob.setTexture(texInfo.key, texInfo.frame);
+                    }
                 }
             } else {
                 if (body.blocked.left) {
                     dir = 1;
                 } else if (body.blocked.right) {
                     dir = -1;
-                } else if (body.blocked.down) {
+                } else if (body.blocked.down && isNearCamera) {
                     const checkX = body.center.x + (dir * (body.halfWidth + 4));
                     const checkY = body.bottom + 2;
                     
@@ -1367,13 +1392,15 @@ export class EnemyManager {
                 mob.setData('direction', dir);
                 mob.setVelocityX(speed * dir);
 
-                const animKey = this.getMobAnimKey(mobType, dir);
-                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
-                    mob.play(animKey, true);
+                if (isNearCamera) {
+                    const animKey = this.getMobAnimKey(mobType, dir);
+                    if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                        mob.play(animKey, true);
+                    }
                 }
             }
 
-            if (canShoot) {
+            if (canShoot && isNearCamera) {
                 const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
                 const range = (mob.getData('range') as number) || 380;
                 const shootInterval = (mob.getData('shootInterval') as number) || 2200;
@@ -1417,6 +1444,8 @@ export class EnemyManager {
             const mob = child as Phaser.Physics.Arcade.Sprite;
             if (!mob.active) return;
 
+            const isNearCamera = mob.x >= activeLeft && mob.x <= activeRight && mob.y >= activeTop && mob.y <= activeBottom;
+
             let dir = mob.getData('direction') as number;
             const speed = (mob.getData('speed') as number) || 70;
             const axis = (mob.getData('axis') as 'horizontal' | 'vertical') || 'horizontal';
@@ -1438,9 +1467,11 @@ export class EnemyManager {
                 mob.setVelocityX(speed * dir);
                 mob.setVelocityY(0);
 
-                const animKey = this.getMobAnimKey(mobType, dir);
-                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
-                    mob.play(animKey, true);
+                if (isNearCamera) {
+                    const animKey = this.getMobAnimKey(mobType, dir);
+                    if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                        mob.play(animKey, true);
+                    }
                 }
             } else {
                 const minY = mob.getData('minY') as number;
@@ -1456,14 +1487,16 @@ export class EnemyManager {
                 mob.setVelocityY(speed * dir);
                 mob.setVelocityX(0);
 
-                const horizontalFacing = this.player.x < mob.x ? -1 : 1;
-                const animKey = this.getMobAnimKey(mobType, horizontalFacing);
-                if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
-                    mob.play(animKey, true);
+                if (isNearCamera) {
+                    const horizontalFacing = this.player.x < mob.x ? -1 : 1;
+                    const animKey = this.getMobAnimKey(mobType, horizontalFacing);
+                    if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                        mob.play(animKey, true);
+                    }
                 }
             }
 
-            if (canShoot) {
+            if (canShoot && isNearCamera) {
                 const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
                 const range = (mob.getData('range') as number) || 380;
                 const shootInterval = (mob.getData('shootInterval') as number) || 2200;
