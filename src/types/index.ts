@@ -7,6 +7,6 @@ export interface Firebar {
   pivotY: number;
   angle: number;
   speed: number;
-  segments: Phaser.GameObjects.Sprite[];
-  distances: number[];
+  sprite: Phaser.GameObjects.Sprite;
+  barLength: number;
 }

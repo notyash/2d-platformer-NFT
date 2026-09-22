@@ -903,8 +903,39 @@ export class EnemyManager {
                 }
             }
 
+            // Calculate the exact surface level of the topmost block of the pipe
+            let pipeSurfaceY = obj.y - 16;
+            if (this.groundLayer) {
+                const tileX = this.groundLayer.worldToTileX(obj.x);
+                const startTileY = this.groundLayer.worldToTileY(obj.y);
+                let topTileY = startTileY;
+
+                // Scan upwards from monster position to find the topmost solid pipe/ground tile
+                for (let ty = startTileY; ty >= startTileY - 6; ty--) {
+                    const tile = this.groundLayer.getTileAt(tileX, ty);
+                    if (tile && tile.index !== -1) {
+                        topTileY = ty;
+                    } else if (ty < startTileY) {
+                        break;
+                    }
+                }
+                const surfaceTile = this.groundLayer.getTileAt(tileX, topTileY);
+                if (surfaceTile) {
+                    pipeSurfaceY = surfaceTile.pixelY;
+                }
+            }
+
+            const halfH = (obj.displayHeight || 23) / 2;
+            // Resting position: fully submerged inside pipe
+            const restingY = pipeSurfaceY + halfH + 8;
+            // Popped position: bottom of monster stays 4px inside the pipe rim so it never floats above
+            const poppedY = pipeSurfaceY - halfH + 4;
+
+            obj.setPosition(obj.x, restingY);
             obj.setData('uniqueKey', uniqueKey);
-            obj.setData('restingY', obj.y);
+            obj.setData('restingY', restingY);
+            obj.setData('poppedY', poppedY);
+            obj.setData('pipeSurfaceY', pipeSurfaceY);
             obj.setData('popDuration', popDuration);
 
             this.pipeMonsters.add(obj);
@@ -1015,7 +1046,8 @@ export class EnemyManager {
         const stayTime = Phaser.Math.Between(600, 1200);
         const popDuration = (monster.getData('popDuration') as number) || 200;
         const restingY = monster.getData('restingY') as number;
-        const popDistance = 24;
+        const poppedY = monster.getData('poppedY') as number;
+        const pipeSurfaceY = (monster.getData('pipeSurfaceY') as number) || (restingY - 16);
 
         this.scene.time.delayedCall(hideTime, () => {
             if (!monster.active) return;
@@ -1023,8 +1055,8 @@ export class EnemyManager {
             const pBody = this.player.body as Phaser.Physics.Arcade.Body;
             const isPlayerAbovePipe = (
                 Math.abs(this.player.x - monster.x) < 30 &&
-                pBody.bottom <= restingY + 6 &&
-                pBody.bottom >= restingY - 64
+                pBody.bottom <= pipeSurfaceY + 6 &&
+                pBody.bottom >= pipeSurfaceY - 64
             );
 
             if (isPlayerAbovePipe) {
@@ -1038,7 +1070,7 @@ export class EnemyManager {
 
             this.scene.tweens.add({ 
                 targets: monster, 
-                y: restingY - popDistance, 
+                y: poppedY, 
                 duration: popDuration, 
                 ease: 'Sine.easeOut', 
                 onComplete: () => {
@@ -1064,23 +1096,64 @@ export class EnemyManager {
         });
     }
 
+    private isPlayerInsideOrBehindSmashGround(): boolean {
+        if (!this.smashLayer || !this.player || !this.player.body) return false;
+        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+        const centerTile = this.smashLayer.getTileAtWorldXY(pBody.center.x, pBody.center.y);
+        if (centerTile && centerTile.index !== -1) return true;
+        const topTile = this.smashLayer.getTileAtWorldXY(pBody.center.x, pBody.top + 2);
+        if (topTile && topTile.index !== -1) return true;
+        const bottomTile = this.smashLayer.getTileAtWorldXY(pBody.center.x, pBody.bottom - 2);
+        if (bottomTile && bottomTile.index !== -1) return true;
+        const leftTile = this.smashLayer.getTileAtWorldXY(pBody.left + 2, pBody.center.y);
+        if (leftTile && leftTile.index !== -1) return true;
+        const rightTile = this.smashLayer.getTileAtWorldXY(pBody.right - 2, pBody.center.y);
+        if (rightTile && rightTile.index !== -1) return true;
+        return false;
+    }
+
     private hasLineOfSight(mobX: number, mobY: number, targetX: number, targetY: number): boolean {
-        if (!this.groundLayer) return true;
+        // If player is standing inside / within smash ground blocks, block all detection
+        if (this.isPlayerInsideOrBehindSmashGround()) return false;
+
+        if (!this.groundLayer && !this.smashLayer) return true;
         
         this.losLine.setTo(mobX, mobY, targetX, targetY);
-        const tiles = this.groundLayer.getTilesWithinShape(this.losLine);
-
-        for (const tile of tiles) {
-            if (tile && tile.index !== -1) {
-                return false;
+        
+        if (this.groundLayer) {
+            const tiles = this.groundLayer.getTilesWithinShape(this.losLine);
+            for (const tile of tiles) {
+                if (tile && tile.index !== -1) {
+                    return false;
+                }
             }
         }
+
         if (this.smashLayer) {
             const smashTiles = this.smashLayer.getTilesWithinShape(this.losLine);
             for (const tile of smashTiles) {
-                if (tile && tile.index !== -1) return false;
+                if (tile && tile.index !== -1) {
+                    return false;
+                }
             }
         }
+
+        // Raycast step check to guarantee zero line-of-sight leaking through tile seams
+        const dist = Phaser.Math.Distance.Between(mobX, mobY, targetX, targetY);
+        const steps = Math.max(2, Math.ceil(dist / 12));
+        for (let i = 1; i < steps; i++) {
+            const sampleX = mobX + ((targetX - mobX) * i) / steps;
+            const sampleY = mobY + ((targetY - mobY) * i) / steps;
+            if (this.groundLayer) {
+                const gTile = this.groundLayer.getTileAtWorldXY(sampleX, sampleY);
+                if (gTile && gTile.index !== -1) return false;
+            }
+            if (this.smashLayer) {
+                const sTile = this.smashLayer.getTileAtWorldXY(sampleX, sampleY);
+                if (sTile && sTile.index !== -1) return false;
+            }
+        }
+
         return true;
     }
 
@@ -1088,19 +1161,15 @@ export class EnemyManager {
         const mobScale = (mob.getData('scale') as number) || 1.0;
         const isFacingRight = (this.player.x >= mob.x);
         const aimDir = isFacingRight ? 1 : -1;
-        mob.setData('direction', aimDir);
-
         const mobType = (mob.getData('type') as string) || '';
         const isStationary = mob.getData('stationary') as boolean;
         const speed = (mob.getData('speed') as number) || 0;
 
         if (isStationary || speed === 0) {
+            mob.setData('direction', aimDir);
             const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
             if (mob.anims.isPlaying) mob.anims.stop();
             mob.setTexture(texInfo.key, texInfo.frame);
-        } else {
-            const animKey = this.getMobAnimKey(mobType, aimDir);
-            if (this.scene.anims.exists(animKey)) mob.play(animKey, true);
         }
         if (mobType === 'shiro-onna') {
             mob.setFlipX(aimDir === -1);
@@ -1470,8 +1539,19 @@ export class EnemyManager {
                         const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
                         const range = (mob.getData('range') as number) || 380;
                         if (distToPlayer <= range) {
-                            dir = this.player.x < mob.x ? -1 : 1;
-                            mob.setData('direction', dir);
+                            const mobScale = (mob.getData('scale') as number) || 1.0;
+                            const eyeX = mob.x;
+                            const eyeY = mob.y - 14 * mobScale;
+                            const targetX = this.player.x;
+                            const targetY = this.player.y - 8;
+
+                            const playerZone = this.ignoreLOSZones.find(z => Phaser.Geom.Rectangle.Contains(z, this.player.x, this.player.y));
+                            const shouldBypassLOS = ignoreLOS || Boolean(playerZone);
+
+                            if (shouldBypassLOS || this.hasLineOfSight(eyeX, eyeY, targetX, targetY)) {
+                                dir = this.player.x < mob.x ? -1 : 1;
+                                mob.setData('direction', dir);
+                            }
                         }
                     }
 
@@ -1486,65 +1566,81 @@ export class EnemyManager {
                 }
             } else {
                 // Moving Ground Mob (Patrol)
-                const lastTurnTime = (mob.getData('lastTurnTime') as number) || 0;
-                const canTurn = (currentTime - lastTurnTime > 200);
-
-                if (body.blocked.left && body.blocked.right) {
-                    // Wedged in narrow space: stop moving to prevent infinite vibrating
+                if (!isNearCamera) {
                     mob.setVelocityX(0);
-                } else if (body.blocked.left || body.touching.left) {
-                    if (canTurn && dir !== 1) {
+                } else {
+                    const lastTurnTime = (mob.getData('lastTurnTime') as number) || 0;
+                    const canTurn = (currentTime - lastTurnTime > 150);
+
+                    const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
+                    const rangeLeft = mob.getData('rangeLeft') as number | undefined;
+                    const rangeRight = mob.getData('rangeRight') as number | undefined;
+
+                    // Range limits
+                    if (canTurn && dir === -1 && rangeLeft !== undefined && (spawnX - mob.x) >= rangeLeft) {
                         dir = 1;
                         mob.setData('lastTurnTime', currentTime);
-                    }
-                } else if (body.blocked.right || body.touching.right) {
-                    if (canTurn && dir !== -1) {
+                    } else if (canTurn && dir === 1 && rangeRight !== undefined && (mob.x - spawnX) >= rangeRight) {
                         dir = -1;
                         mob.setData('lastTurnTime', currentTime);
                     }
-                } else if (body.blocked.down && isNearCamera && canTurn) {
-                    // Lookahead: check floor and hazards ahead
-                    const lookDist = Math.max(10, body.halfWidth * 0.7);
-                    const checkX = body.center.x + (dir * lookDist);
-                    const checkY = body.bottom + 4;
-                    
-                    const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
-                    const oneWayTile = oneWayLayer.getTileAtWorldXY(checkX, checkY);
-                    const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
-                    const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1);
-                    
-                    // Check if floor or body height ahead contains a hazard tile
-                    let isFloorHazard = false;
-                    let isWallHazard = false;
-                    if (this.hazardsLayer) {
-                        const hFloorTile = this.hazardsLayer.getTileAtWorldXY(checkX, checkY);
-                        if (hFloorTile && hFloorTile.index !== -1) isFloorHazard = true;
 
-                        const hWallTile = this.hazardsLayer.getTileAtWorldXY(checkX, body.center.y);
-                        if (hWallTile && hWallTile.index !== -1) isWallHazard = true;
-                    }
-
-                    if (!hasFloor || isFloorHazard || isWallHazard) {
-                        // Check opposite side floor to detect isolated 1-tile ledges
-                        const oppCheckX = body.center.x - (dir * lookDist);
-                        const oppTile = groundLayer.getTileAtWorldXY(oppCheckX, checkY);
-                        const oppOneWay = oneWayLayer.getTileAtWorldXY(oppCheckX, checkY);
-                        const oppSmash = this.smashLayer ? this.smashLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
-                        const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1);
-
-                        if (!oppHasFloor) {
-                            mob.setVelocityX(0);
-                        } else {
-                            dir *= -1;
+                    if (body.blocked.left && body.blocked.right) {
+                        // Wedged in narrow space: stop moving to prevent infinite vibrating
+                        mob.setVelocityX(0);
+                    } else if (body.blocked.left || body.touching.left) {
+                        if (canTurn && dir !== 1) {
+                            dir = 1;
                             mob.setData('lastTurnTime', currentTime);
                         }
-                    }
-                }
-                
-                mob.setData('direction', dir);
-                mob.setVelocityX(speed * dir);
+                    } else if (body.blocked.right || body.touching.right) {
+                        if (canTurn && dir !== -1) {
+                            dir = -1;
+                            mob.setData('lastTurnTime', currentTime);
+                        }
+                    } else {
+                        // Lookahead: check floor ahead of leading edge (accounting for scale & speed)
+                        const lookaheadDist = Math.max(6, Math.ceil(speed * 0.06));
+                        const checkX = dir === 1 ? body.right + lookaheadDist : body.left - lookaheadDist;
+                        const checkY = body.bottom + 6;
+                        
+                        const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
+                        const oneWayTile = oneWayLayer.getTileAtWorldXY(checkX, checkY);
+                        const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
+                        const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1);
+                        
+                        // Check if floor or body height ahead contains a hazard tile
+                        let isFloorHazard = false;
+                        let isWallHazard = false;
+                        if (this.hazardsLayer) {
+                            const hFloorTile = this.hazardsLayer.getTileAtWorldXY(checkX, checkY);
+                            if (hFloorTile && hFloorTile.index !== -1) isFloorHazard = true;
 
-                if (isNearCamera) {
+                            const hWallTile = this.hazardsLayer.getTileAtWorldXY(checkX, body.center.y);
+                            if (hWallTile && hWallTile.index !== -1) isWallHazard = true;
+                        }
+
+                        if (!hasFloor || isFloorHazard || isWallHazard) {
+                            // Check opposite side floor to detect isolated 1-tile ledges
+                            const oppCheckX = dir === 1 ? body.left - lookaheadDist : body.right + lookaheadDist;
+                            const oppTile = groundLayer.getTileAtWorldXY(oppCheckX, checkY);
+                            const oppOneWay = oneWayLayer.getTileAtWorldXY(oppCheckX, checkY);
+                            const oppSmash = this.smashLayer ? this.smashLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
+                            const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1);
+
+                            if (!oppHasFloor) {
+                                mob.setVelocityX(0);
+                            } else if (canTurn) {
+                                dir *= -1;
+                                mob.setData('direction', dir);
+                                mob.setData('lastTurnTime', currentTime);
+                            }
+                        }
+                    }
+                    
+                    mob.setData('direction', dir);
+                    mob.setVelocityX(speed * dir);
+
                     const animKey = this.getMobAnimKey(mobType, dir);
                     if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
                         mob.play(animKey, true);
@@ -1572,14 +1668,14 @@ export class EnemyManager {
                         mob.setData('lastShootTime', currentTime);
                         
                         const aimDir = this.player.x < mob.x ? -1 : 1;
-                        mob.setData('direction', aimDir);
                         if (isStationary || speed === 0) {
+                            mob.setData('direction', aimDir);
                             const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
                             if (mob.anims.isPlaying) mob.anims.stop();
                             mob.setTexture(texInfo.key, texInfo.frame);
                         } else {
-                            const animKey = this.getMobAnimKey(mobType, aimDir);
-                            if (this.scene.anims.exists(animKey)) mob.play(animKey, true);
+                            // Moving patrol mobs fire towards player without breaking patrol ledge safety
+                            mob.setData('lastAimDir', aimDir);
                         }
                         if (mobType === 'shiro-onna') {
                             mob.setFlipX(aimDir === -1);

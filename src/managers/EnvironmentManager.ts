@@ -46,6 +46,7 @@ export class EnvironmentManager {
     public windZones: WindZoneData[] = [];
     public fakeGrounds: FakeGroundData[] = [];
     public checkpoints: CheckpointData[] = [];
+    public dandelions: Phaser.GameObjects.Sprite[] = [];
 
     public doorExitX: number = 0;
     public doorExitY: number = 0;
@@ -411,16 +412,91 @@ export class EnvironmentManager {
         }
     }
 
-    setupJumpPads(rawMapObjects: any[]) {
-        const rawPads = rawMapObjects.filter((o: any) => o.name === 'JumpPad');
+    setupJumpPads(map: Phaser.Tilemaps.Tilemap, rawMapObjects: any[]) {
+        const rawPads = rawMapObjects.filter((o: any) => {
+            const name = (o.name || '').toLowerCase();
+            const type = (o.type || '').toLowerCase();
+            const className = (o.class || '').toLowerCase();
+            return name === 'jumppad' || name === 'jump-pad' || name === 'jump_pad' || name === 'pad' ||
+                   type === 'jumppad' || type === 'jump-pad' || className === 'jumppad' || className === 'jump-pad';
+        });
+
         rawPads.forEach((rawObj: any) => {
-            const padSprite = this.scene.physics.add.sprite(rawObj.x, rawObj.y, 'jump-pad-img').setDepth(4).setOrigin(0, 1);
-            if (rawObj.width) padSprite.setDisplaySize(rawObj.width, rawObj.height);
+            let textureKey = 'jump-pad-img';
+            let frameIndex: number | string | undefined = undefined;
+
+            if (rawObj.gid && map && map.tilesets) {
+                const cleanGid = rawObj.gid & 0x1FFFFFFF;
+                const tileset = map.tilesets.find((t: any) => cleanGid >= t.firstgid && cleanGid < t.firstgid + t.total);
+                if (tileset) {
+                    const localId = cleanGid - tileset.firstgid;
+                    const tilesetKeyMap: Record<string, string> = {
+                        'LevelObjectTiles': 'levelobjects',
+                        'levelobjects': 'levelobjects',
+                        'LandTiles_32_32': 'landtiles',
+                        'landtiles': 'landtiles',
+                        'sky': 'sky',
+                        'clouds1': 'clouds1',
+                        'cloud2': 'cloud2',
+                        'smallTree': 'smallTree',
+                        'largeTree': 'largeTree',
+                        'grass': 'grass',
+                        'cherry blossom': 'cherry blossom',
+                        'well': 'well',
+                        'water': 'water',
+                        'lava': 'lava',
+                        'moving-platform': 'moving-platform',
+                        'moving-platform-img': 'moving-platform-img',
+                        'wooden moving platform': 'wooden moving platform',
+                        'jump-pad': 'jump-pad-img',
+                        'jump-pad-img': 'jump-pad-img',
+                        'dandelion': 'dandelion',
+                        'dandelion flower sprite': 'dandelion',
+                        'plain-ground': 'plain-ground',
+                        'bush': 'bush'
+                    };
+
+                    const resolvedKey = tilesetKeyMap[tileset.name] || tileset.name;
+                    if (this.scene.textures.exists(resolvedKey)) {
+                        textureKey = resolvedKey;
+                        const tex = this.scene.textures.get(resolvedKey);
+                        const frameKey = String(localId);
+                        
+                        // If texture does not already have this individual tile frame, add it dynamically from tileset coordinates
+                        if (!tex.has(frameKey)) {
+                            const tileW = tileset.tileWidth || 32;
+                            const tileH = tileset.tileHeight || 32;
+                            const srcImg = tex.getSourceImage() as HTMLImageElement;
+                            const imgW = (srcImg && srcImg.width) ? srcImg.width : (tileset.columns ? tileset.columns * tileW : 96);
+                            const cols = tileset.columns || Math.max(1, Math.floor(imgW / tileW));
+                            const col = localId % cols;
+                            const row = Math.floor(localId / cols);
+                            const frameX = col * tileW;
+                            const frameY = row * tileH;
+                            tex.add(frameKey, 0, frameX, frameY, tileW, tileH);
+                        }
+                        frameIndex = frameKey;
+                    }
+                }
+            }
+
+            const padSprite = (frameIndex !== undefined)
+                ? this.scene.physics.add.sprite(rawObj.x, rawObj.y, textureKey, frameIndex)
+                : this.scene.physics.add.sprite(rawObj.x, rawObj.y, textureKey);
+
+            padSprite.setDepth(4).setOrigin(0, 1);
+            if (rawObj.width && rawObj.height) {
+                padSprite.setDisplaySize(rawObj.width, rawObj.height);
+            }
             
             let bouncePower = 800; 
             if (rawObj.properties) {
-                const pProp = rawObj.properties.find((p: any) => p.name.toLowerCase() === 'power');
-                if (pProp) bouncePower = Number(pProp.value);
+                if (Array.isArray(rawObj.properties)) {
+                    const pProp = rawObj.properties.find((p: any) => p && p.name && p.name.toLowerCase() === 'power');
+                    if (pProp && pProp.value !== undefined) bouncePower = Number(pProp.value);
+                } else if (typeof rawObj.properties === 'object') {
+                    if (rawObj.properties.power !== undefined) bouncePower = Number(rawObj.properties.power);
+                }
             }
             padSprite.setData('bouncePower', -Math.abs(bouncePower));
             const padBody = padSprite.body as Phaser.Physics.Arcade.Body;
@@ -434,7 +510,7 @@ export class EnvironmentManager {
             const padBody = (padObj as Phaser.GameObjects.Sprite).body as Phaser.Physics.Arcade.Body;
             const currentTime = this.scene.time.now;
             
-            if (pBody.touching.down && padBody.touching.up && (currentTime - lastBounceTime > 300)) {
+            if ((pBody.touching.down || pBody.blocked.down || pBody.bottom <= padBody.top + 8) && (currentTime - lastBounceTime > 200)) {
                 this.player.setVelocityY((padObj as Phaser.GameObjects.Sprite).getData('bouncePower'));
                 this.player.isNormalJump = false; 
                 this.player.ignoreGroundJumpUntil = currentTime + 150;
@@ -449,7 +525,7 @@ export class EnvironmentManager {
         rawFirebars.forEach((obj: any) => {
             const pivotX = obj.x! + (obj.width || 0) / 2;
             const pivotY = obj.y! + (obj.height || 0) / 2;
-            let length = 5;
+            let length = 4;
             let rawSpeed = 0.05;
             let startAngleRad = 0;
             
@@ -482,25 +558,17 @@ export class EnvironmentManager {
             // If user enters direct radians step (e.g. 0.05, 0.08, 0.025, -0.05): use directly
             const speed = Math.abs(rawSpeed) >= 0.5 ? rawSpeed * 0.05 : rawSpeed;
             
-            const segments: Phaser.GameObjects.Sprite[] = [], distances: number[] = [];
-            for (let i = 0; i < length; i++) {
-                const dist = (i + 1) * 16; 
-                const segment = this.scene.physics.add.sprite(
-                    pivotX + Math.cos(startAngleRad) * dist, 
-                    pivotY + Math.sin(startAngleRad) * dist, 
-                    'fireball'
-                );
-                segment.setDepth(5);
-                
-                const segBody = segment.body as Phaser.Physics.Arcade.Body;
-                segBody.setAllowGravity(false).setImmovable(true).setCircle(6, 2, 2); 
-                
-                segments.push(segment); 
-                distances.push(dist);
-                
-                this.scene.physics.add.overlap(this.player, segment, () => this.player.die());
-            }
-            this.firebars.push({ pivotX, pivotY, angle: startAngleRad, speed, segments, distances });
+            const scaleRatio = Math.max(0.5, (length * 16) / 31);
+            const sprite = this.scene.add.sprite(pivotX, pivotY, 'firebar-sprite');
+            // Exact center of the bottom hook: pixel (15.5, 48.5) in 32x64 frame
+            sprite.setOrigin(15.5 / 32, 48.5 / 64);
+            sprite.setScale(1, scaleRatio);
+            sprite.setDepth(5);
+            sprite.play('firebar-spin');
+            sprite.setRotation(startAngleRad + Math.PI / 2);
+
+            const barLength = 31 * scaleRatio;
+            this.firebars.push({ pivotX, pivotY, angle: startAngleRad, speed, sprite, barLength });
         });
     }
 
@@ -514,21 +582,100 @@ export class EnvironmentManager {
         }
     }
 
+    setupDandelions(rawMapObjects: any[]) {
+        this.dandelions = [];
+        rawMapObjects.filter((obj: any) => {
+            const name = String(obj.name || '').trim().toLowerCase();
+            const type = String(obj.type || '').trim().toLowerCase();
+            return name === 'dandelion' || type === 'dandelion' || name.startsWith('dandelion');
+        }).forEach((obj: any) => {
+            const posX = obj.x || 0;
+            // Tiled objects with GID (tile objects) have origin at bottom-left (y is bottom)
+            const hasGid = obj.gid !== undefined;
+            const originY = hasGid ? 1 : 0;
+            const posY = obj.y || 0;
+
+            let depth = 2.5;
+            let animSpeed = 6;
+
+            if (obj.properties) {
+                if (Array.isArray(obj.properties)) {
+                    const depthProp = obj.properties.find((p: any) => p && p.name && p.name.toLowerCase() === 'depth');
+                    if (depthProp && depthProp.value !== undefined) depth = Number(depthProp.value);
+
+                    const speedProp = obj.properties.find((p: any) => p && p.name && (p.name.toLowerCase() === 'speed' || p.name.toLowerCase() === 'fps'));
+                    if (speedProp && speedProp.value !== undefined) animSpeed = Number(speedProp.value);
+                } else if (typeof obj.properties === 'object') {
+                    if (obj.properties.depth !== undefined) depth = Number(obj.properties.depth);
+                    if (obj.properties.speed !== undefined) animSpeed = Number(obj.properties.speed);
+                }
+            }
+
+            const sprite = this.scene.add.sprite(posX, posY, 'dandelion')
+                .setOrigin(0, originY)
+                .setDepth(depth);
+
+            // Optional custom scaling if specified in Tiled
+            if (obj.width && obj.height && (obj.width !== 32 || obj.height !== 32)) {
+                sprite.setDisplaySize(obj.width, obj.height);
+            }
+
+            // Stagger start frame randomly so multiple dandelions sway naturally out of sync
+            const startFrame = Math.floor(Math.random() * 4);
+            sprite.play({
+                key: 'dandelion-sway',
+                startFrame: startFrame,
+                frameRate: animSpeed,
+                repeat: -1
+            });
+
+            this.dandelions.push(sprite);
+        });
+    }
+
     update(delta: number = 16.667) {
         const deltaFactor = Math.min(delta / 16.6667, 3.0); // Normalized 60Hz delta scale
         const cam = this.scene.cameras.main;
         const camLeft = cam.scrollX - 200;
         const camRight = cam.scrollX + cam.width + 200;
+        const pBounds = this.player.getBounds();
+        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
 
         this.firebars.forEach(bar => {
             bar.angle += bar.speed * deltaFactor;
-            // Only update segment positions if near the camera view
-            if (bar.pivotX >= camLeft && bar.pivotX <= camRight) {
-                for (let i = 0; i < bar.segments.length; i++) {
-                    bar.segments[i].setPosition(
-                        bar.pivotX + Math.cos(bar.angle) * bar.distances[i],
-                        bar.pivotY + Math.sin(bar.angle) * bar.distances[i]
-                    );
+            bar.sprite.setRotation(bar.angle + Math.PI / 2);
+
+            // Only update collision if near the camera view
+            if (bar.pivotX >= camLeft && bar.pivotX <= camRight && this.player && this.player.active) {
+                const tipX = bar.pivotX + Math.cos(bar.angle) * bar.barLength;
+                const tipY = bar.pivotY + Math.sin(bar.angle) * bar.barLength;
+                
+                // Pixel-accurate player body bounds (inset slightly to ignore empty border padding)
+                const playerRect = new Phaser.Geom.Rectangle(
+                    pBody.x + 2, 
+                    pBody.y + 2, 
+                    Math.max(1, pBody.width - 4), 
+                    Math.max(1, pBody.height - 4)
+                );
+                const fireLine = new Phaser.Geom.Line(bar.pivotX, bar.pivotY, tipX, tipY);
+
+                let isHit = Phaser.Geom.Intersects.LineToRectangle(fireLine, playerRect);
+                if (!isHit) {
+                    // Check flame pixel thickness (3.5px radius strictly along the rotating firebar)
+                    const sampleCount = 6;
+                    for (let s = 1; s <= sampleCount; s++) {
+                        const dist = (bar.barLength * s) / sampleCount;
+                        const sampleX = bar.pivotX + Math.cos(bar.angle) * dist;
+                        const sampleY = bar.pivotY + Math.sin(bar.angle) * dist;
+                        if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(sampleX, sampleY, 3.5), playerRect)) {
+                            isHit = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isHit) {
+                    this.player.die();
                 }
             }
         });
@@ -545,9 +692,6 @@ export class EnvironmentManager {
                 platBody.setVelocityX(platSpeed);
             }
         });
-
-        const pBounds = this.player.getBounds();
-        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
         const currentTime = this.scene.time.now;
 
         // Handle Custom Checkpoint Zones

@@ -40,6 +40,8 @@
 ---
 
 ### ⏳ Immediate & Near-Term
+- [ ] **Pipe Monster Pop-out Refinement**:
+  - Fine-tune Pipe Monster emergence height and distance relative to the pipe's top rim so it never appears disconnected or floating above the pipe surface across all pipe placements.
 - [ ] **UI Polish & Visual Enhancements**:
   - Modernize HUD design with crisp retro glassmorphism, responsive status bars, and vibrant equipment status cards.
   - Refine pause menu and overlay layouts, improving button hover effects, typography, and spacing.

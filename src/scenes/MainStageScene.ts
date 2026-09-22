@@ -55,6 +55,12 @@ export class MainStageScene extends Phaser.Scene {
         // Tileset overlays
         this.load.image('plain-ground', 'assets/sprites/background/plainGround.png');
 
+        this.load.image('cherry blossom', 'assets/sprites/background/cherry blossom.png');
+        this.load.spritesheet('dandelion', 'assets/sprites/background/dandelion flower sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.image('well', 'assets/sprites/blocks/well.png');
+        this.load.image('water', 'assets/sprites/blocks/water.png');
+        this.load.image('lava', 'assets/sprites/blocks/lava.png');
+        this.load.image('bush', 'assets/sprites/background/bush.png');
         this.load.image('moving-platform-img', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('wooden moving platform', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('moving-platform', 'assets/sprites/misc/moving-platform.png');
@@ -65,6 +71,7 @@ export class MainStageScene extends Phaser.Scene {
         
         // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
+        this.load.spritesheet('firebar-sprite', 'assets/sprites/misc/firebar sprite.png', { frameWidth: 32, frameHeight: 64 });
         this.load.spritesheet('enemy-fireball', 'assets/sprites/misc/fireball sprite.png', { frameWidth: 32, frameHeight: 32 });
 
         // Mob Sprites (Bug, Devil, Hedgehog, Bonsai Gripper, Pumpkin Bat, Sandal)
@@ -127,7 +134,8 @@ export class MainStageScene extends Phaser.Scene {
             'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
             'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
             'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin', 'moving-platform-img', 'wooden moving platform', 'moving-platform',
-            'player-fall-gun-l', 'player-fall-gun-r'
+            'cherry blossom', 'well', 'water', 'lava', 'firebar-sprite',
+            'player-fall-gun-l', 'player-fall-gun-r', 'dandelion'
         ];
         cleanTextureKeys.forEach(key => {
             if (this.textures.exists(key)) {
@@ -135,7 +143,10 @@ export class MainStageScene extends Phaser.Scene {
             }
         });
 
-        const rawMapObjects = map.getObjectLayer('Objects')?.objects || [];
+        const allObjectLayers = map.objects || [];
+        const rawMapObjects = allObjectLayers.length > 0 
+            ? allObjectLayers.flatMap(layer => layer.objects || [])
+            : (map.getObjectLayer('Objects')?.objects || []);
         
         // Find initial spawn
         let spawnX = 100, spawnY = 100;
@@ -181,9 +192,10 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.setupDoors(rawMapObjects);
         this.envManager.setupGunDisarmZones(rawMapObjects);
         this.envManager.setupMovingPlatforms(map, rawMapObjects);
-        this.envManager.setupJumpPads(rawMapObjects);
+        this.envManager.setupJumpPads(map, rawMapObjects);
         this.envManager.setupFirebars(rawMapObjects);
         this.envManager.setupSmashTriggers(map);
+        this.envManager.setupDandelions(rawMapObjects);
 
         // Setup Entities & Level Objects
         this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
@@ -464,8 +476,35 @@ export class MainStageScene extends Phaser.Scene {
         const smallTreeTileset = map.addTilesetImage('smallTree', 'smallTree');
         const largeTreeTileset = map.addTilesetImage('largeTree', 'largeTree');
         const grassTileset = map.addTilesetImage('grass', 'grass');
+        const cherryBlossomTileset = map.addTilesetImage('cherry blossom', 'cherry blossom');
+        const wellTileset = map.addTilesetImage('well', 'well');
+        const waterTileset = map.addTilesetImage('water', 'water');
+        const lavaTileset = map.addTilesetImage('lava', 'lava');
+        const bushTileset = map.addTilesetImage('bush', 'bush');
+        const dandelionTileset = map.addTilesetImage('dandelion flower sprite', 'dandelion');
+        const movingPlatformTileset = map.addTilesetImage('moving-platform', 'moving-platform');
+        const woodenPlatformTileset = map.addTilesetImage('wooden moving platform', 'wooden moving platform');
+        const jumpPadTileset = map.addTilesetImage('jump-pad', 'jump-pad-img');
 
-        const allTilesets = [levelObjectsTileset, landTileset, skyTileset, clouds1Tileset, cloud2Tileset, smallTreeTileset, largeTreeTileset, grassTileset].filter(Boolean) as Phaser.Tilemaps.Tileset[];
+        const allTilesets = [
+            levelObjectsTileset,
+            landTileset,
+            skyTileset,
+            clouds1Tileset,
+            cloud2Tileset,
+            smallTreeTileset,
+            largeTreeTileset,
+            grassTileset,
+            cherryBlossomTileset,
+            wellTileset,
+            waterTileset,
+            lavaTileset,
+            bushTileset,
+            dandelionTileset,
+            movingPlatformTileset,
+            woodenPlatformTileset,
+            jumpPadTileset
+        ].filter(Boolean) as Phaser.Tilemaps.Tileset[];
 
         map.createLayer('Sky', allTilesets, 0, 0)?.setDepth(0);
         map.createLayer('Trees', allTilesets, 0, 0)?.setDepth(1);
@@ -556,6 +595,12 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'mob-lava-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'mob-kappa-walk-l', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'mob-kappa-walk-r', frames: this.anims.generateFrameNumbers('mob-lava-kappa', { start: 4, end: 7 }), frameRate: 8, repeat: -1 });
+
+        // Firebar spinning fire animation (4 frames)
+        this.anims.create({ key: 'firebar-spin', frames: this.anims.generateFrameNumbers('firebar-sprite', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+
+        // Dandelion gentle sway animation (4 frames)
+        this.anims.create({ key: 'dandelion-sway', frames: this.anims.generateFrameNumbers('dandelion', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
     }
 
     update(_time: number, delta: number) {
