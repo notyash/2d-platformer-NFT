@@ -332,17 +332,33 @@ export class EnvironmentManager {
         const rawPlatforms = rawMapObjects.filter((o: any) => o.name === 'MovingPlatform');
 
         platformObjects.forEach((obj: any, index: number) => {
+            const rawObj = rawPlatforms[index];
+            if (rawObj && rawObj.gid && map.tilesets) {
+                const tileset = map.tilesets.find(t => rawObj.gid >= t.firstgid && rawObj.gid < t.firstgid + t.total);
+                if (tileset && this.scene.textures.exists(tileset.name)) {
+                    obj.setTexture(tileset.name);
+                }
+            }
+
             this.scene.physics.add.existing(obj);
             const platBody = obj.body as Phaser.Physics.Arcade.Body;
             platBody.allowGravity = false; 
             platBody.immovable = true;     
+            
+            // Tighten hitbox to match visible platform pixels (removing transparent top/bottom padding)
+            if (obj.texture && (obj.texture.key === 'wooden moving platform' || obj.texture.key === 'moving-platform-img')) {
+                platBody.setSize(obj.width, 12).setOffset(0, 10);
+            } else if (obj.texture && obj.texture.key === 'moving-platform') {
+                platBody.setSize(obj.width, 18).setOffset(0, 6);
+            } else {
+                platBody.setSize(obj.width, 12).setOffset(0, 10);
+            }     
             
             let platSpeed = 250;
             let platDistance = 150;
             let platDirection = 1;
             let platFriction = 1;
 
-            const rawObj = rawPlatforms[index];
             if (rawObj && rawObj.properties) {
                 const speedProp = rawObj.properties.find((p: any) => p.name.toLowerCase() === 'speed');
                 if (speedProp && speedProp.value !== undefined) {
@@ -390,7 +406,7 @@ export class EnvironmentManager {
             this.scene.physics.add.collider(this.player, this.movingPlatforms, (_p, plat) => {
                 const pBody = (_p as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.Body;
                 const platBody = (plat as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.Body;
-                if (pBody.bottom <= platBody.top + 2) this.player.isOnPlatform = true;
+                if (pBody.bottom <= platBody.top + 4) this.player.isOnPlatform = true;
             });
         }
     }

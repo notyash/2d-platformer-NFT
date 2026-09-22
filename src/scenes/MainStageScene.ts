@@ -55,11 +55,13 @@ export class MainStageScene extends Phaser.Scene {
         // Tileset overlays
         this.load.image('plain-ground', 'assets/sprites/background/plainGround.png');
 
-        this.load.image('moving-platform-img', 'assets/sprites/misc/moving-platform.png');
+        this.load.image('moving-platform-img', 'assets/sprites/misc/wooden moving platform.png');
+        this.load.image('wooden moving platform', 'assets/sprites/misc/wooden moving platform.png');
+        this.load.image('moving-platform', 'assets/sprites/misc/moving-platform.png');
         this.load.image('pipe-monster-l', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
         this.load.image('pipe-monster-r', 'assets/sprites/monsters/Devil_Red_Stand_R.png');
         this.load.image('jump-pad-img', 'assets/sprites/misc/jump-pad.png');
-        this.load.spritesheet('coin', 'assets/sprites/collectibles/Coin_24x24_Anim.png', { frameWidth: 24, frameHeight: 24 });
+        this.load.spritesheet('coin', 'assets/sprites/collectibles/new coin sprite.png', { frameWidth: 32, frameHeight: 32 });
         
         // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
@@ -106,7 +108,8 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('jump-r', 'assets/sprites/player/Melissa_Jump1_R.png');
         this.load.image('jump-l', 'assets/sprites/player/Melissa_Jump1_L.png');
         this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
-        this.load.image('fall-l', 'assets/sprites/player/Melissa_Fall2_L.png');
+        this.load.spritesheet('player-fall-gun-l', 'assets/sprites/player/Main-Sprite-Falling-With-Gun-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-fall-gun-r', 'assets/sprites/player/Main-Sprite-Falling-With-Gun-R.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('walk-r', 'assets/sprites/player/Main-Sprite-Walk-R.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('walk-l', 'assets/sprites/player/Main-Sprite-Walk-L.png', { frameWidth: 32, frameHeight: 32 });
     }
@@ -123,7 +126,8 @@ export class MainStageScene extends Phaser.Scene {
             'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster-l', 'pipe-monster-r',
             'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
             'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
-            'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin'
+            'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin', 'moving-platform-img', 'wooden moving platform', 'moving-platform',
+            'player-fall-gun-l', 'player-fall-gun-r'
         ];
         cleanTextureKeys.forEach(key => {
             if (this.textures.exists(key)) {
@@ -504,7 +508,9 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'walk-l-anim', frames: this.anims.generateFrameNumbers('walk-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fall-l-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fall-r-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 3, end: 5 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'fall-gun-l-anim', frames: this.anims.generateFrameNumbers('player-fall-gun-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'fall-gun-r-anim', frames: this.anims.generateFrameNumbers('player-fall-gun-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
         
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });

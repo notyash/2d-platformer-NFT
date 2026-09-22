@@ -233,17 +233,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
                     this.setTexture('player-jump-fall', frame);
                 }
             } else {
-                // Falling / Descending using Main-Sprite-Falling.png
-                const fallAnimKey = this.facing === 'right' ? 'fall-r-anim' : 'fall-l-anim';
-                if (this.scene.anims.exists(fallAnimKey)) {
-                    if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallAnimKey) {
-                        this.anims.play(fallAnimKey, true);
+                // Falling / Descending
+                if (this.hasGun) {
+                    const fallGunAnimKey = this.facing === 'right' ? 'fall-gun-r-anim' : 'fall-gun-l-anim';
+                    if (this.scene.anims.exists(fallGunAnimKey)) {
+                        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallGunAnimKey) {
+                            this.anims.play(fallGunAnimKey, true);
+                        }
+                    } else {
+                        if (this.anims.isPlaying) this.anims.stop();
+                        const key = this.facing === 'right' ? 'player-fall-gun-r' : 'player-fall-gun-l';
+                        if (this.texture.key !== key) {
+                            this.setTexture(key, 0);
+                        }
                     }
                 } else {
-                    if (this.anims.isPlaying) this.anims.stop();
-                    const frame = this.facing === 'right' ? 3 : 0;
-                    if (this.texture.key !== 'player-fall' || this.frame.name !== String(frame)) {
-                        this.setTexture('player-fall', frame);
+                    const fallAnimKey = this.facing === 'right' ? 'fall-r-anim' : 'fall-l-anim';
+                    if (this.scene.anims.exists(fallAnimKey)) {
+                        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallAnimKey) {
+                            this.anims.play(fallAnimKey, true);
+                        }
+                    } else {
+                        if (this.anims.isPlaying) this.anims.stop();
+                        const frame = this.facing === 'right' ? 3 : 0;
+                        if (this.texture.key !== 'player-fall' || this.frame.name !== String(frame)) {
+                            this.setTexture('player-fall', frame);
+                        }
                     }
                 }
             }

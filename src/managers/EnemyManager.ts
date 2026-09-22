@@ -1087,6 +1087,24 @@ export class EnemyManager {
     private fireEnemyProjectile(mob: Phaser.Physics.Arcade.Sprite, boundZone?: Phaser.Geom.Rectangle, ignoreWalls: boolean = false) {
         const mobScale = (mob.getData('scale') as number) || 1.0;
         const isFacingRight = (this.player.x >= mob.x);
+        const aimDir = isFacingRight ? 1 : -1;
+        mob.setData('direction', aimDir);
+
+        const mobType = (mob.getData('type') as string) || '';
+        const isStationary = mob.getData('stationary') as boolean;
+        const speed = (mob.getData('speed') as number) || 0;
+
+        if (isStationary || speed === 0) {
+            const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
+            if (mob.anims.isPlaying) mob.anims.stop();
+            mob.setTexture(texInfo.key, texInfo.frame);
+        } else {
+            const animKey = this.getMobAnimKey(mobType, aimDir);
+            if (this.scene.anims.exists(animKey)) mob.play(animKey, true);
+        }
+        if (mobType === 'shiro-onna') {
+            mob.setFlipX(aimDir === -1);
+        }
 
         // Spawn projectile at the shooter mob's mouth/beak (offset from center-feet origin)
         const mouthX = mob.x + (isFacingRight ? 9 : -9) * mobScale;
@@ -1461,8 +1479,9 @@ export class EnemyManager {
                     if (mob.anims.isPlaying) {
                         mob.anims.stop();
                     }
-                    if (mob.texture.key !== texInfo.key || (texInfo.frame !== undefined && mob.frame.name !== String(texInfo.frame))) {
-                        mob.setTexture(texInfo.key, texInfo.frame);
+                    mob.setTexture(texInfo.key, texInfo.frame);
+                    if (mobType === 'shiro-onna') {
+                        mob.setFlipX(dir === -1);
                     }
                 }
             } else {
@@ -1553,8 +1572,17 @@ export class EnemyManager {
                         mob.setData('lastShootTime', currentTime);
                         
                         const aimDir = this.player.x < mob.x ? -1 : 1;
+                        mob.setData('direction', aimDir);
                         if (isStationary || speed === 0) {
-                            mob.setData('direction', aimDir);
+                            const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
+                            if (mob.anims.isPlaying) mob.anims.stop();
+                            mob.setTexture(texInfo.key, texInfo.frame);
+                        } else {
+                            const animKey = this.getMobAnimKey(mobType, aimDir);
+                            if (this.scene.anims.exists(animKey)) mob.play(animKey, true);
+                        }
+                        if (mobType === 'shiro-onna') {
+                            mob.setFlipX(aimDir === -1);
                         }
 
                         this.scene.tweens.add({
@@ -1623,7 +1651,7 @@ export class EnemyManager {
                 mob.setVelocityX(0);
 
                 if (isNearCamera) {
-                    const horizontalFacing = this.player.x < mob.x ? -1 : 1;
+                    const horizontalFacing = canShoot ? (this.player.x < mob.x ? -1 : 1) : ((mob.getData('initialDirection') as number) || (mob.getData('direction') as number) || 1);
                     const animKey = this.getMobAnimKey(mobType, horizontalFacing);
                     if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
                         mob.play(animKey, true);
@@ -1649,6 +1677,16 @@ export class EnemyManager {
 
                     if (shouldBypassLOS || this.hasLineOfSight(eyeX, eyeY, targetX, targetY)) {
                         mob.setData('lastShootTime', currentTime);
+
+                        const aimDir = this.player.x < mob.x ? -1 : 1;
+                        mob.setData('direction', aimDir);
+                        const animKey = this.getMobAnimKey(mobType, aimDir);
+                        if (this.scene.anims.exists(animKey)) {
+                            mob.play(animKey, true);
+                        }
+                        if (mobType === 'shiro-onna') {
+                            mob.setFlipX(aimDir === -1);
+                        }
 
                         this.scene.tweens.add({
                             targets: mob,

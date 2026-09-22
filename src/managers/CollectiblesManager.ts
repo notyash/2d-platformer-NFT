@@ -117,8 +117,21 @@ export class CollectiblesManager {
             // Check for custom scale property or default collectible scale
             let customScale = 1.0;
             if (Array.isArray(obj.properties)) {
-                const scaleProp = obj.properties.find((p: any) => p.name === 'scale');
-                if (scaleProp && typeof scaleProp.value === 'number') customScale = scaleProp.value;
+                const scaleProp = obj.properties.find((p: any) => p && (p.name === 'scale' || p.name === 'size' || p.name === 'coinscale'));
+                if (scaleProp && scaleProp.value !== undefined && !isNaN(parseFloat(scaleProp.value))) {
+                    customScale = parseFloat(scaleProp.value);
+                }
+            } else if (obj.properties && typeof obj.properties === 'object') {
+                const propVal = obj.properties.scale ?? obj.properties.size ?? obj.properties.coinscale;
+                if (propVal !== undefined && !isNaN(parseFloat(propVal))) {
+                    customScale = parseFloat(propVal);
+                }
+            }
+            if (obj.getData && typeof obj.getData === 'function') {
+                const dataScale = obj.getData('scale') ?? obj.getData('size') ?? obj.getData('coinscale');
+                if (dataScale !== undefined && dataScale !== null && !isNaN(parseFloat(dataScale))) {
+                    customScale = parseFloat(dataScale);
+                }
             }
             if (name === 'GunPowerup' && customScale === 1.0) {
                 customScale = 0.65; // Sized down from raw 32x32 to ~21px
