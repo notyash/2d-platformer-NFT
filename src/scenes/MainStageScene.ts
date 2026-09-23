@@ -74,7 +74,9 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('cloud variation', 'assets/sprites/boss/cloud variation.png');
         this.load.image('moving-platform-img', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('wooden moving platform', 'assets/sprites/misc/wooden moving platform.png');
-        this.load.image('moving-platform', 'assets/sprites/misc/moving-platform.png');
+        this.load.image('spike', 'assets/sprites/misc/spike.png');
+        this.load.image('misc/spike', 'assets/sprites/misc/spike.png');
+        this.load.image('blocks/spike', 'assets/sprites/blocks/spike.png');
         this.load.image('pipe-monster-l', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
         this.load.image('pipe-monster-r', 'assets/sprites/monsters/Devil_Red_Stand_R.png');
         this.load.image('jump-pad-img', 'assets/sprites/misc/jump-pad.png');
@@ -137,6 +139,13 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('lava-death-r', 'assets/sprites/effects/lava death sprite-r.png', { frameWidth: 32, frameHeight: 32 });
 
         // Auto-discover and preload all images and sprites in public/assets/ (including sprites, blocks, misc, backgrounds, etc.)
+        const explicitPreloadKeys = new Set<string>([
+            'spike', 'misc/spike', 'blocks/spike', 'landtiles', 'levelobjects', 'sky', 'clouds1', 'cloud2',
+            'smallTree', 'largeTree', 'grass', 'cherry blossom', 'dandelion', 'well', 'water', 'lava', 'bush',
+            'mountain', '32 files dungeon', '64 files dungeon', 'cloud variation', 'plain-ground', 'plainGround',
+            'plain-dungeon', 'plainDungeon', 'moving-platform', 'wooden moving platform', 'jump-pad-img'
+        ]);
+
         const autoAssetModules = import.meta.glob<{ default?: string } | string>(
             '../../public/assets/**/*.{png,jpg,jpeg,svg,webp}', 
             { eager: true, query: '?url', import: 'default' }
@@ -175,7 +184,7 @@ export class MainStageScene extends Phaser.Scene {
             extraKeys.forEach(k => keys.add(k));
 
             keys.forEach(key => {
-                if (key && !this.textures.exists(key)) {
+                if (key && !explicitPreloadKeys.has(key) && !this.textures.exists(key)) {
                     this.load.image(key, url || cleanRelPath);
                 }
             });
@@ -238,8 +247,7 @@ export class MainStageScene extends Phaser.Scene {
 
         // Setup Level Environment Objects & Checkpoints
         this.envManager.setupCheckpoints(rawMapObjects);
-        this.envManager.setupFakeGround(rawMapObjects);
-        this.envManager.setupFillGround(rawMapObjects);
+        this.envManager.setupRevealTriggers(rawMapObjects);
         this.envManager.setupRevealTileLayers(map, this.allTilesets);
         this.envManager.setupWindZones(rawMapObjects);
         this.envManager.setupDoors(rawMapObjects);
@@ -420,8 +428,28 @@ export class MainStageScene extends Phaser.Scene {
                         const isHorizontallyInLava = pBody.right > tileLeft + 3 && pBody.left < tileRight - 3;
                         const isVerticallyInLava = pBody.bottom >= tileTop + 10 && pBody.top <= tileBottom;
                         return isHorizontallyInLava && isVerticallyInLava;
+                    } else if (t.index === 3596) {
+                        // Up spike (pointing upwards from floor)
+                        const isHorizontallyTouching = pBody.right >= tileLeft + 6 && pBody.left <= tileRight - 6;
+                        const isVerticallyTouching = pBody.bottom >= tileTop + 8 && pBody.top <= tileBottom - 2;
+                        return isHorizontallyTouching && isVerticallyTouching;
+                    } else if (t.index === 3598) {
+                        // Down spike (hanging downwards from ceiling)
+                        const isHorizontallyTouching = pBody.right >= tileLeft + 6 && pBody.left <= tileRight - 6;
+                        const isVerticallyTouching = pBody.top <= tileBottom - 8 && pBody.bottom >= tileTop + 2;
+                        return isHorizontallyTouching && isVerticallyTouching;
+                    } else if (t.index === 3597) {
+                        // Right spike (pointing right from wall)
+                        const isHorizontallyTouching = pBody.left <= tileRight - 8 && pBody.right >= tileLeft + 2;
+                        const isVerticallyTouching = pBody.bottom >= tileTop + 6 && pBody.top <= tileBottom - 6;
+                        return isHorizontallyTouching && isVerticallyTouching;
+                    } else if (t.index === 3599) {
+                        // Left spike (pointing left from wall)
+                        const isHorizontallyTouching = pBody.right >= tileLeft + 8 && pBody.left <= tileRight - 2;
+                        const isVerticallyTouching = pBody.bottom >= tileTop + 6 && pBody.top <= tileBottom - 6;
+                        return isHorizontallyTouching && isVerticallyTouching;
                     } else {
-                        // Spikes / other hazards: pixel-accurate inner bounding box to prevent clipping air margins
+                        // Spikes / other hazards fallback: pixel-accurate inner bounding box to prevent clipping air margins
                         const isHorizontallyTouching = pBody.right >= tileLeft + 6 && pBody.left <= tileRight - 6;
                         const isVerticallyTouching = pBody.bottom >= tileTop + 8 && pBody.top <= tileBottom - 4;
                         return isHorizontallyTouching && isVerticallyTouching;
@@ -606,6 +634,7 @@ export class MainStageScene extends Phaser.Scene {
         const cloudVariationTileset = map.addTilesetImage('cloud variation', 'cloud variation');
         const plainDungeonTileset = map.addTilesetImage('plainDungeon', 'plainDungeon') || map.addTilesetImage('plain-dungeon', 'plain-dungeon');
         const plainGroundTileset = map.addTilesetImage('plainGround', 'plainGround') || map.addTilesetImage('plain-ground', 'plain-ground');
+        const spikeTileset = map.addTilesetImage('spike', 'spike');
 
         const allTilesets = [
             levelObjectsTileset,
@@ -630,15 +659,21 @@ export class MainStageScene extends Phaser.Scene {
             dungeon64Tileset,
             cloudVariationTileset,
             plainDungeonTileset,
-            plainGroundTileset
+            plainGroundTileset,
+            spikeTileset
         ].filter(Boolean) as Phaser.Tilemaps.Tileset[];
 
         // Automatically link any tilesets referenced in map.tilesets that match loaded textures
         if (map.tilesets && map.tilesets.length > 0) {
             map.tilesets.forEach(ts => {
                 if (!allTilesets.some(t => t.name === ts.name)) {
+                    const cleanImg = (ts as any).image ? (ts as any).image.replace(/^(\.\.\/)+/, '').replace(/\.[^/.]+$/, '') : '';
                     const candidates = [
                         ts.name,
+                        cleanImg,
+                        cleanImg.replace(/^assets\//, ''),
+                        cleanImg.replace(/^sprites\//, ''),
+                        cleanImg.split('/').pop() || '',
                         ts.name.replace(/\.[^/.]+$/, ''),
                         ts.name.replace(/[-_]/g, ' '),
                         ts.name.replace(/\s+/g, '-'),
