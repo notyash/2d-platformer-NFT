@@ -16,8 +16,34 @@ export interface WindZoneData {
 }
 
 export interface FakeGroundData {
+    id?: string;
+    isBossTrigger?: boolean;
     tileSprite: Phaser.GameObjects.TileSprite;
     bounds: Phaser.Geom.Rectangle;
+}
+
+export interface RevealTileLayerData {
+    id: string;
+    name: string;
+    layer: Phaser.Tilemaps.TilemapLayer;
+    collider?: Phaser.Physics.Arcade.Collider;
+    revealed: boolean;
+    initialRevealed: boolean;
+    snapshotRevealed: boolean;
+    keepRevealed: boolean;
+}
+
+export interface FillGroundData {
+    id: string;
+    tileSprite: Phaser.GameObjects.TileSprite;
+    bounds: Phaser.Geom.Rectangle;
+    solidBody?: Phaser.Physics.Arcade.StaticBody;
+    solidCollider?: Phaser.Physics.Arcade.Collider;
+    filled: boolean;
+    initialFilled: boolean;
+    snapshotFilled: boolean;
+    solid: boolean;
+    keepFilled: boolean;
 }
 
 export interface CheckpointData {
@@ -45,6 +71,8 @@ export class EnvironmentManager {
     public disarmZones: Phaser.GameObjects.Zone[] = [];
     public windZones: WindZoneData[] = [];
     public fakeGrounds: FakeGroundData[] = [];
+    public fillGrounds: FillGroundData[] = [];
+    public revealTileLayers: RevealTileLayerData[] = [];
     public checkpoints: CheckpointData[] = [];
     public dandelions: Phaser.GameObjects.Sprite[] = [];
 
@@ -208,23 +236,347 @@ export class EnvironmentManager {
         });
     }
 
+    private resolveTextureKey(requested: string, fallback: string = 'plain-ground'): string {
+        if (!requested) return fallback;
+        const rawVal = requested.trim();
+        const cleanVal = rawVal.replace(/^.*[\\/]/, '').replace(/\.png$/i, '');
+        const hyphenVal = cleanVal.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+        const noHyphenVal = cleanVal.replace(/-/g, '').toLowerCase();
+
+        const candidates = [
+            rawVal,
+            cleanVal,
+            hyphenVal,
+            cleanVal.toLowerCase(),
+            noHyphenVal
+        ];
+
+        for (const candidate of candidates) {
+            if (this.scene.textures.exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        console.warn(`[EnvironmentManager] Texture '${requested}' not found in Phaser cache. Using fallback '${fallback}'.`);
+        return fallback;
+    }
+
     setupFakeGround(rawMapObjects: any[]) {
         rawMapObjects.filter((obj: any) => 
             obj.name === 'FakeGround' || 
             obj.name === 'IllusoryWall' || 
-            obj.name === 'SecretGround'
+            obj.name === 'SecretGround' ||
+            obj.name === 'BossFight' ||
+            obj.name === 'Boss' ||
+            obj.name === 'BossTrigger' ||
+            obj.name === 'BossZone' ||
+            (typeof obj.name === 'string' && (
+                obj.name.startsWith('FakeGround') || 
+                obj.name.startsWith('BossFight') ||
+                obj.name.startsWith('Boss') ||
+                obj.name.toLowerCase().includes('boss')
+            ))
         ).forEach((obj: any) => {
-            const x = obj.x || 0;
-            const y = obj.y || 0;
             const width = obj.width || 32;
             const height = obj.height || 32;
+            const x = obj.x || 0;
+            // In Tiled, tile objects have obj.gid and their y is bottom-aligned
+            const y = obj.gid !== undefined ? (obj.y - height) : (obj.y || 0);
 
-            const tileSprite = this.scene.add.tileSprite(x, y, width, height, 'plain-ground')
+            let textureKey = 'plain-ground';
+            let tileOffsetX = 0;
+            let tileOffsetY = 0;
+            let id = '';
+            let depth = 6;
+
+            const isBossTrigger = typeof obj.name === 'string' && (
+                obj.name.toLowerCase().includes('boss') ||
+                obj.name.toLowerCase().includes('bossfight')
+            );
+            if (isBossTrigger) {
+                id = 'BossFill';
+            }
+
+            const nameMatch = typeof obj.name === 'string' ? obj.name.match(/(?:FakeGround|BossFight|Boss)[_-]?(\w*)/i) : null;
+            if (nameMatch && nameMatch[1]) {
+                id = nameMatch[1].trim();
+            }
+
+            if (obj.properties && Array.isArray(obj.properties)) {
+                const idProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'id' || 
+                    p.name.toLowerCase() === 'linkid' || 
+                    p.name.toLowerCase() === 'triggerid' ||
+                    p.name.toLowerCase() === 'groupid' ||
+                    p.name.toLowerCase() === 'link'
+                );
+                if (idProp && idProp.value !== undefined && idProp.value !== null) {
+                    id = String(idProp.value).trim();
+                }
+
+                const texProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'texture' || 
+                    p.name.toLowerCase() === 'tileset' || 
+                    p.name.toLowerCase() === 'tile' ||
+                    p.name.toLowerCase() === 'image' ||
+                    p.name.toLowerCase() === 'sprite'
+                );
+                if (texProp && typeof texProp.value === 'string') {
+                    textureKey = this.resolveTextureKey(texProp.value, 'plain-ground');
+                }
+
+                const offXProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'tileoffsetx' || 
+                    p.name.toLowerCase() === 'offsetx' ||
+                    p.name.toLowerCase() === 'tilepositionx'
+                );
+                if (offXProp) tileOffsetX = Number(offXProp.value) || 0;
+
+                const offYProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'tileoffsety' || 
+                    p.name.toLowerCase() === 'offsety' ||
+                    p.name.toLowerCase() === 'tilepositiony'
+                );
+                if (offYProp) tileOffsetY = Number(offYProp.value) || 0;
+
+                const depthProp = obj.properties.find((p: any) => p.name && (p.name.toLowerCase() === 'depth' || p.name.toLowerCase() === 'zindex'));
+                if (depthProp && depthProp.value !== undefined) depth = Number(depthProp.value);
+            }
+
+            const tileSprite = this.scene.add.tileSprite(x, y, width, height, textureKey)
                 .setOrigin(0, 0)
-                .setDepth(6);
+                .setDepth(depth);
+
+            if (tileOffsetX !== 0 || tileOffsetY !== 0) {
+                tileSprite.setTilePosition(tileOffsetX, tileOffsetY);
+            }
 
             const bounds = new Phaser.Geom.Rectangle(x, y, width, height);
-            this.fakeGrounds.push({ tileSprite, bounds });
+            this.fakeGrounds.push({ id, isBossTrigger, tileSprite, bounds });
+        });
+    }
+
+    setupFillGround(rawMapObjects: any[]) {
+        rawMapObjects.filter((obj: any) => 
+            obj.name === 'FillGround' || 
+            obj.name === 'FillZone' || 
+            obj.name === 'TrapGround' || 
+            obj.name === 'TrapDoor' ||
+            (typeof obj.name === 'string' && obj.name.startsWith('FillGround'))
+        ).forEach((obj: any) => {
+            const width = obj.width || 32;
+            const height = obj.height || 32;
+            const x = obj.x || 0;
+            const y = obj.gid !== undefined ? (obj.y - height) : (obj.y || 0);
+
+            let textureKey = 'plain-ground';
+            let tileOffsetX = 0;
+            let tileOffsetY = 0;
+            let id = '';
+            let solid = true;
+            let keepFilled = true;
+
+            const nameMatch = typeof obj.name === 'string' ? obj.name.match(/FillGround[_-]?(\w+)/i) : null;
+            if (nameMatch && nameMatch[1]) {
+                id = nameMatch[1].trim();
+            }
+
+            if (obj.properties && Array.isArray(obj.properties)) {
+                const idProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'id' || 
+                    p.name.toLowerCase() === 'linkid' || 
+                    p.name.toLowerCase() === 'triggerid' ||
+                    p.name.toLowerCase() === 'groupid' ||
+                    p.name.toLowerCase() === 'link'
+                );
+                if (idProp && idProp.value !== undefined && idProp.value !== null) {
+                    id = String(idProp.value).trim();
+                }
+
+                const texProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'texture' || 
+                    p.name.toLowerCase() === 'tileset' || 
+                    p.name.toLowerCase() === 'tile' ||
+                    p.name.toLowerCase() === 'image' ||
+                    p.name.toLowerCase() === 'sprite'
+                );
+                if (texProp && typeof texProp.value === 'string') {
+                    textureKey = this.resolveTextureKey(texProp.value, 'plain-ground');
+                }
+
+                const solidProp = obj.properties.find((p: any) => p.name.toLowerCase() === 'solid');
+                if (solidProp !== undefined && solidProp !== null) {
+                    solid = solidProp.value === true || String(solidProp.value).toLowerCase() === 'true';
+                }
+
+                const keepProp = obj.properties.find((p: any) => p.name.toLowerCase() === 'keepfilled' || p.name.toLowerCase() === 'permanent');
+                if (keepProp !== undefined && keepProp !== null) {
+                    keepFilled = keepProp.value === true || String(keepProp.value).toLowerCase() === 'true';
+                }
+
+                const offXProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'tileoffsetx' || 
+                    p.name.toLowerCase() === 'offsetx' ||
+                    p.name.toLowerCase() === 'tilepositionx'
+                );
+                if (offXProp) tileOffsetX = Number(offXProp.value) || 0;
+
+                const offYProp = obj.properties.find((p: any) => 
+                    p.name.toLowerCase() === 'tileoffsety' || 
+                    p.name.toLowerCase() === 'offsety' ||
+                    p.name.toLowerCase() === 'tilepositiony'
+                );
+                if (offYProp) tileOffsetY = Number(offYProp.value) || 0;
+            }
+
+            const tileSprite = this.scene.add.tileSprite(x, y, width, height, textureKey)
+                .setOrigin(0, 0)
+                .setDepth(6)
+                .setVisible(false)
+                .setAlpha(0);
+
+            if (tileOffsetX !== 0 || tileOffsetY !== 0) {
+                tileSprite.setTilePosition(tileOffsetX, tileOffsetY);
+            }
+
+            const bounds = new Phaser.Geom.Rectangle(x, y, width, height);
+
+            let solidCollider: Phaser.Physics.Arcade.Collider | undefined;
+            let solidBody: Phaser.Physics.Arcade.StaticBody | undefined;
+
+            if (solid) {
+                const zone = this.scene.add.zone(x + width / 2, y + height / 2, width, height);
+                this.scene.physics.add.existing(zone, true);
+                solidBody = zone.body as Phaser.Physics.Arcade.StaticBody;
+                solidBody.enable = false;
+
+                solidCollider = this.scene.physics.add.collider(this.player, zone);
+                solidCollider.active = false;
+            }
+
+            this.fillGrounds.push({
+                id,
+                tileSprite,
+                bounds,
+                solidBody,
+                solidCollider,
+                filled: false,
+                initialFilled: false,
+                snapshotFilled: false,
+                solid,
+                keepFilled
+            });
+        });
+    }
+
+    setupRevealTileLayers(map: Phaser.Tilemaps.Tilemap, allTilesets: Phaser.Tilemaps.Tileset[]) {
+        const standardLayerNames = [
+            'Sky', 'Trees', 'Background', 'Transparent', 
+            'Ground', 'OneWayPlatforms', 'SmashGround', 
+            'Hazards', 'Foreground'
+        ];
+
+        map.layers.forEach(layerData => {
+            const name = layerData.name;
+            if (standardLayerNames.includes(name)) return;
+
+            let id = name.trim();
+            let keepRevealed = name.toLowerCase().includes('boss') || name.toLowerCase().includes('bossfill');
+
+            // Extract ID from layer name (e.g. SecretLayer_1, Reveal_1, Reveal1, Dungeon1, Layer1, BossFill, etc.)
+            const match = name.match(/^(?:Secret|Reveal|Hidden|Dungeon|TileLayer|Layer|Boss|Fill)[_-]?(\w*)$/i);
+            if (match && match[1]) {
+                id = match[1].trim();
+            }
+
+            if (name.toLowerCase().includes('boss')) {
+                keepRevealed = true;
+            }
+
+            // Calculate depth based on Tiled layer stack index or custom property
+            let depth = 10;
+            const layerIndex = map.layers.indexOf(layerData);
+            if (layerIndex !== -1) {
+                depth = layerIndex;
+            }
+
+            // Check custom properties on the tile layer in Tiled
+            const rawProps = (layerData as any).properties;
+            let collides = false;
+            if (rawProps && Array.isArray(rawProps)) {
+                const idProp = rawProps.find((p: any) => 
+                    p.name && (
+                        p.name.toLowerCase() === 'id' || 
+                        p.name.toLowerCase() === 'linkid' || 
+                        p.name.toLowerCase() === 'triggerid' ||
+                        p.name.toLowerCase() === 'groupid' ||
+                        p.name.toLowerCase() === 'link'
+                    )
+                );
+                if (idProp && idProp.value !== undefined && idProp.value !== null) {
+                    id = String(idProp.value).trim();
+                }
+
+                const depthProp = rawProps.find((p: any) => 
+                    p.name && (
+                        p.name.toLowerCase() === 'depth' || 
+                        p.name.toLowerCase() === 'zindex' || 
+                        p.name.toLowerCase() === 'z-index' || 
+                        p.name.toLowerCase() === 'z_index' ||
+                        p.name.toLowerCase() === 'layerdepth'
+                    )
+                );
+                if (depthProp && depthProp.value !== undefined && !isNaN(Number(depthProp.value))) {
+                    depth = Number(depthProp.value);
+                }
+
+                const keepProp = rawProps.find((p: any) => 
+                    p.name && (
+                        p.name.toLowerCase() === 'keeprevealed' || 
+                        p.name.toLowerCase() === 'permanent' ||
+                        p.name.toLowerCase() === 'sticky'
+                    )
+                );
+                if (keepProp && keepProp.value !== undefined) {
+                    keepRevealed = keepProp.value === true || String(keepProp.value).toLowerCase() === 'true';
+                }
+
+                const colProp = rawProps.find((p: any) => 
+                    p.name && (
+                        p.name.toLowerCase() === 'collides' || 
+                        p.name.toLowerCase() === 'solid' || 
+                        p.name.toLowerCase() === 'collision'
+                    )
+                );
+                if (colProp && colProp.value !== undefined) {
+                    collides = colProp.value === true || String(colProp.value).toLowerCase() === 'true';
+                }
+            }
+
+            const createdLayer = map.createLayer(name, allTilesets, 0, 0);
+            if (createdLayer && 'setDepth' in createdLayer) {
+                const layer = createdLayer as Phaser.Tilemaps.TilemapLayer;
+                layer.setDepth(depth);
+                layer.setAlpha(0);
+
+                let collider: Phaser.Physics.Arcade.Collider | undefined;
+                if (collides || name.toLowerCase().includes('fill') || name.toLowerCase().includes('ground') || name.toLowerCase().includes('wall')) {
+                    layer.setCollisionByExclusion([-1], true);
+                    collider = this.scene.physics.add.collider(this.player, layer);
+                    collider.active = false;
+                }
+
+                this.revealTileLayers.push({
+                    id,
+                    name,
+                    layer,
+                    collider,
+                    revealed: false,
+                    initialRevealed: false,
+                    snapshotRevealed: false,
+                    keepRevealed
+                });
+            }
         });
     }
 
@@ -633,6 +985,47 @@ export class EnvironmentManager {
         });
     }
 
+    setupStartTutorialCues(rawMapObjects: any[] = [], spawnX: number = 105, spawnY: number = 176) {
+        const jumpObj = rawMapObjects.find((obj: any) => obj.name === 'JumpInstructions' || obj.name === 'jumpInstructions');
+
+        const w = jumpObj?.width ? jumpObj.width : 220;
+        const h = jumpObj?.height ? jumpObj.height : 52;
+        const panelX = jumpObj ? jumpObj.x + w / 2 : (spawnX + 105);
+        const panelY = jumpObj ? jumpObj.y + h / 2 : (spawnY - 10);
+
+        const bg = this.scene.add.graphics();
+        bg.fillStyle(0x0f172a, 0.5);
+        bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+        bg.lineStyle(1.5, 0x38bdf8, 0.5);
+        bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+
+        const offset = Math.min(Math.max(h * 0.28, 14), h / 2 - 10);
+
+        const header = this.scene.add.text(0, -offset, '▲ JUMP MECHANICS', {
+            fontSize: '11px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#38bdf8',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const controlsText = this.scene.add.text(0, 0, '[SPACE]  /  [W]  /  [↑]', {
+            fontSize: '11px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#f8fafc',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const mechanicsText = this.scene.add.text(0, offset, 'Tap: Short-Hop  •  Hold: High Jump', {
+            fontSize: '9.5px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#cbd5e1',
+            fontStyle: 'normal'
+        }).setOrigin(0.5);
+
+        const container = this.scene.add.container(panelX, panelY, [bg, header, controlsText, mechanicsText]);
+        container.setDepth(3);
+    }
+
     update(delta: number = 16.667) {
         const deltaFactor = Math.min(delta / 16.6667, 3.0); // Normalized 60Hz delta scale
         const cam = this.scene.cameras.main;
@@ -675,7 +1068,7 @@ export class EnvironmentManager {
                 }
 
                 if (isHit) {
-                    this.player.die();
+                    this.player.die('lava');
                 }
             }
         });
@@ -717,13 +1110,31 @@ export class EnvironmentManager {
             }
         }
 
-        // Handle FakeGround / Illusory Walls
+        // Handle FakeGround / Illusory Walls & Trigger Linked FillGround / Reveal TileLayers
         for (const fake of this.fakeGrounds) {
             const isInside = Phaser.Geom.Intersects.RectangleToRectangle(pBounds, fake.bounds);
             if (isInside) {
                 fake.tileSprite.setAlpha(0);
+                if (fake.id) {
+                    this.triggerFillGround(fake.id);
+                }
+                this.triggerRevealTileLayer(fake.id || '', fake.isBossTrigger);
+                if (fake.isBossTrigger) {
+                    this.triggerFillGround('BossFill');
+                    this.triggerFillGround('Boss');
+                    this.triggerRevealTileLayer('BossFill', true);
+                }
             } else {
                 fake.tileSprite.setAlpha(1);
+                if (fake.id) {
+                    this.checkRevertFillGround(fake.id);
+                }
+                this.checkRevertRevealTileLayer(fake.id || '', fake.isBossTrigger);
+                if (fake.isBossTrigger) {
+                    this.checkRevertFillGround('BossFill');
+                    this.checkRevertFillGround('Boss');
+                    this.checkRevertRevealTileLayer('BossFill', true);
+                }
             }
         }
 
@@ -746,34 +1157,37 @@ export class EnvironmentManager {
 
         // Handle Teleport Door (Standard Door Teleporter without checkpoint lock)
         let isPlayerInDoor = false;
+        let activeDoorZone: Phaser.GameObjects.Zone | null = null;
         for (const zone of this.doorZones) {
             if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, zone.getBounds())) {
                 isPlayerInDoor = true;
+                activeDoorZone = zone;
                 break;
             }
         }
         this.player.isNearDoor = isPlayerInDoor;
 
-        if (isPlayerInDoor) {
-            // Display sleek "E to enter" floating prompt above player
+        if (isPlayerInDoor && activeDoorZone) {
+            // Display static "Press E To Enter" prompt fixed directly above the door entrance
             if (!this.doorPrompt) {
+                const promptX = activeDoorZone.x;
+                const promptY = activeDoorZone.y - (activeDoorZone.height / 2) - 8;
+
                 const bg = this.scene.add.graphics();
                 bg.fillStyle(0x0f172a, 0.9);
-                bg.fillRoundedRect(-48, -14, 96, 28, 8);
+                bg.fillRoundedRect(-58, -14, 116, 28, 8);
                 bg.lineStyle(1.5, 0x38bdf8, 0.95);
-                bg.strokeRoundedRect(-48, -14, 96, 28, 8);
+                bg.strokeRoundedRect(-58, -14, 116, 28, 8);
 
-                const txt = this.scene.add.text(0, 0, 'E to enter', {
-                    fontSize: '13px',
+                const txt = this.scene.add.text(0, 0, 'Press E To Enter', {
+                    fontSize: '12px',
                     fontFamily: 'Arial, sans-serif',
                     color: '#f8fafc',
                     fontStyle: 'bold'
                 }).setOrigin(0.5);
 
-                this.doorPrompt = this.scene.add.container(this.player.x, this.player.y - 36, [bg, txt]);
+                this.doorPrompt = this.scene.add.container(promptX, promptY, [bg, txt]);
                 this.doorPrompt.setDepth(30);
-            } else {
-                this.doorPrompt.setPosition(this.player.x, this.player.y - 36);
             }
         } else {
             if (this.doorPrompt) {
@@ -824,9 +1238,147 @@ export class EnvironmentManager {
         else if (pBody.blocked.down) this.player.canSmash = false; 
     }
 
+    public triggerFillGround(id: string) {
+        if (!id) return;
+        for (const fill of this.fillGrounds) {
+            if (fill.id === id && !fill.filled) {
+                fill.filled = true;
+                fill.tileSprite.setVisible(true);
+                fill.tileSprite.setAlpha(1);
+                if (fill.solidCollider) {
+                    fill.solidCollider.active = true;
+                }
+                if (fill.solidBody) {
+                    fill.solidBody.enable = true;
+                }
+            }
+        }
+    }
+
+    private checkRevertFillGround(id: string) {
+        if (!id) return;
+        const pBounds = this.player.getBounds();
+        const stillInside = this.fakeGrounds.some(f => f.id === id && Phaser.Geom.Intersects.RectangleToRectangle(pBounds, f.bounds));
+        if (!stillInside) {
+            for (const fill of this.fillGrounds) {
+                if (fill.id === id && !fill.keepFilled && fill.filled) {
+                    fill.filled = false;
+                    fill.tileSprite.setVisible(false);
+                    fill.tileSprite.setAlpha(0);
+                    if (fill.solidCollider) {
+                        fill.solidCollider.active = false;
+                    }
+                    if (fill.solidBody) {
+                        fill.solidBody.enable = false;
+                    }
+                }
+            }
+        }
+    }
+
+    public triggerRevealTileLayer(id: string, isBossTrigger: boolean = false) {
+        if (!id && !isBossTrigger) return;
+        const lowerId = String(id || '').toLowerCase();
+        for (const reveal of this.revealTileLayers) {
+            const rNameLower = reveal.name.toLowerCase();
+            const rIdLower = reveal.id.toLowerCase();
+            const match = (
+                (id && (reveal.id === id || reveal.name === id || rNameLower === lowerId || rIdLower === lowerId)) ||
+                ((isBossTrigger || lowerId.includes('boss')) && (rNameLower.includes('boss') || rIdLower.includes('boss') || rNameLower.includes('fill')))
+            );
+            if (match && !reveal.revealed) {
+                reveal.revealed = true;
+                reveal.layer.setAlpha(1);
+                if (reveal.collider) {
+                    reveal.collider.active = true;
+                }
+            }
+        }
+    }
+
+    private checkRevertRevealTileLayer(id: string, isBossTrigger: boolean = false) {
+        if (!id && !isBossTrigger) return;
+        const pBounds = this.player.getBounds();
+        const stillInside = this.fakeGrounds.some(f => 
+            (f.id === id || (isBossTrigger && f.isBossTrigger)) && 
+            Phaser.Geom.Intersects.RectangleToRectangle(pBounds, f.bounds)
+        );
+        if (!stillInside) {
+            const lowerId = String(id || '').toLowerCase();
+            for (const reveal of this.revealTileLayers) {
+                if (reveal.keepRevealed) continue;
+                const rNameLower = reveal.name.toLowerCase();
+                const rIdLower = reveal.id.toLowerCase();
+                const match = (
+                    (id && (reveal.id === id || reveal.name === id || rNameLower === lowerId || rIdLower === lowerId)) ||
+                    ((isBossTrigger || lowerId.includes('boss')) && (rNameLower.includes('boss') || rIdLower.includes('boss')))
+                );
+                if (match && !reveal.keepRevealed && reveal.revealed) {
+                    reveal.revealed = false;
+                    reveal.layer.setAlpha(0);
+                    if (reveal.collider) {
+                        reveal.collider.active = false;
+                    }
+                }
+            }
+        }
+    }
+
+    public saveCheckpointSnapshot() {
+        for (const fill of this.fillGrounds) {
+            fill.snapshotFilled = fill.filled;
+        }
+        for (const reveal of this.revealTileLayers) {
+            reveal.snapshotRevealed = reveal.revealed;
+        }
+    }
+
+    public rollbackToCheckpoint() {
+        for (const fill of this.fillGrounds) {
+            fill.filled = fill.snapshotFilled;
+            fill.tileSprite.setVisible(fill.filled);
+            fill.tileSprite.setAlpha(fill.filled ? 1 : 0);
+            if (fill.solidCollider) {
+                fill.solidCollider.active = fill.filled;
+            }
+            if (fill.solidBody) {
+                fill.solidBody.enable = fill.filled;
+            }
+        }
+        for (const reveal of this.revealTileLayers) {
+            if (reveal.keepRevealed && reveal.revealed) {
+                reveal.layer.setAlpha(1);
+                if (reveal.collider) reveal.collider.active = true;
+            } else {
+                reveal.revealed = reveal.snapshotRevealed;
+                reveal.layer.setAlpha(reveal.revealed ? 1 : 0);
+                if (reveal.collider) reveal.collider.active = reveal.revealed;
+            }
+        }
+    }
+
     resetAll() {
         for (const fake of this.fakeGrounds) {
             fake.tileSprite.setAlpha(1);
+        }
+
+        for (const fill of this.fillGrounds) {
+            fill.filled = fill.initialFilled;
+            fill.snapshotFilled = fill.initialFilled;
+            fill.tileSprite.setVisible(fill.filled);
+            fill.tileSprite.setAlpha(fill.filled ? 1 : 0);
+            if (fill.solidCollider) {
+                fill.solidCollider.active = fill.filled;
+            }
+            if (fill.solidBody) {
+                fill.solidBody.enable = fill.filled;
+            }
+        }
+
+        for (const reveal of this.revealTileLayers) {
+            reveal.revealed = reveal.initialRevealed;
+            reveal.snapshotRevealed = reveal.initialRevealed;
+            reveal.layer.setAlpha(reveal.revealed ? 1 : 0);
         }
 
         this.movingPlatforms.forEach(plat => {

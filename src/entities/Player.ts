@@ -28,6 +28,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public hasGun: boolean = false;
     public hasTotem: boolean = false;
     public isInvincible: boolean = false; 
+    public isDying: boolean = false;
+    private activeDeathSprite?: Phaser.GameObjects.Sprite;
 
     // Spawns
     public spawnX: number = 100;
@@ -53,6 +55,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         ctrl: false
     };
 
+    public getActiveKeys(): string[] {
+        const keys: string[] = [];
+        if (this.cursors.left?.isDown || this.keyA?.isDown) keys.push('LEFT');
+        if (this.cursors.right?.isDown || this.keyD?.isDown) keys.push('RIGHT');
+        if (this.cursors.up?.isDown || this.keyW?.isDown || this.spaceKey?.isDown) keys.push('JUMP');
+        if (this.ctrlKey?.isDown) keys.push('SHOOT');
+        if (this.keyE?.isDown) keys.push('ACTION');
+        return keys;
+    }
+
     constructor(scene: Phaser.Scene, x: number, y: number, soundManager?: SoundManager) {
         super(scene, x, y, 'idle-r');
         this.soundManager = soundManager;
@@ -60,7 +72,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         scene.physics.add.existing(this);
 
         this.setCollideWorldBounds(true);
-        this.setDepth(4);
+        this.setDepth(5);
         this.setBodySize(14, 24);
         this.setOffset(9, 8);
         (this.body as Phaser.Physics.Arcade.Body).setMaxVelocity(10000, 10000);
@@ -104,6 +116,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     update() {
+        if (this.isDying) {
+            this.setVelocity(0, 0);
+            return;
+        }
+
         const speed = 200, jumpSpeed = 400, shortHopCap = -150;
         const body = this.body as Phaser.Physics.Arcade.Body;
         const isGrounded = body.blocked.down || this.isOnPlatform;
@@ -292,8 +309,47 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
-    die() {
-        if (this.isInvincible) return;
+    public cancelDeathEffect() {
+        if (this.activeDeathSprite && this.activeDeathSprite.active) {
+            this.scene.tweens.killTweensOf(this.activeDeathSprite);
+            this.activeDeathSprite.destroy();
+            this.activeDeathSprite = undefined;
+        }
+        this.isDying = false;
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.setEnable(true);
+        }
+        this.setVisible(true);
+        this.setAlpha(1);
+    }
+
+    public finishRespawn() {
+        this.isDying = false;
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.setEnable(true);
+        }
+        this.setPosition(this.activeSpawnX, this.activeSpawnY);
+        this.setVelocity(0, 0);
+        this.setVisible(true);
+        this.setAlpha(1);
+
+        const idleAnimKey = this.facing === 'right' ? 'idle-r-anim' : 'idle-l-anim';
+        if (this.scene.anims.exists(idleAnimKey)) {
+            this.anims.play(idleAnimKey, true);
+        } else {
+            this.anims.stop();
+            this.setTexture(this.facing === 'right' ? 'idle-r' : 'idle-l');
+        }
+        this.hasGun = false;
+        this.clearTint();
+        this.enforceKeyLift();
+        this.scene.events.emit('player-respawn');
+    }
+
+    die(reason: 'default' | 'lava' = 'default') {
+        if (this.isInvincible || this.isDying) return;
 
         // If player has Totem Shield: absorb death without resetting stage
         if (this.hasTotem) {
@@ -311,22 +367,89 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
-        // Full Death: Respawn at active checkpoint & reset stage
-        this.setPosition(this.activeSpawnX, this.activeSpawnY); 
+        // Full Death: play death effect sprite, then smoothly respawn at spawn point
+        this.isDying = true;
+        const deathX = this.x;
+        const deathY = this.y;
+
         this.setVelocity(0, 0);
-        const idleAnimKey = this.facing === 'right' ? 'idle-r-anim' : 'idle-l-anim';
-        if (this.scene.anims.exists(idleAnimKey)) {
-            this.anims.play(idleAnimKey, true);
-        } else {
-            this.anims.stop(); 
-            this.setTexture(this.facing === 'right' ? 'idle-r' : 'idle-l');
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.setEnable(false);
         }
-        this.hasGun = false; 
+        this.setVisible(false);
+        this.hasGun = false;
         this.clearTint();
         this.soundManager?.playDeath();
-        this.enforceKeyLift();
 
         // Emit death event for collectibles & mobs reset
         this.scene.events.emit('player-death');
+
+        if (reason === 'lava') {
+            const isRight = this.facing === 'right';
+            const spriteKey = isRight ? 'lava-death-r' : 'lava-death-l';
+            const animKey = isRight ? 'lava-death-r-anim' : 'lava-death-l-anim';
+            const effectDuration = 520;
+
+            if (this.scene.textures.exists(spriteKey)) {
+                // Spawn inside the lava block
+                const deathSprite = this.scene.add.sprite(deathX, deathY + 6, spriteKey, isRight ? 5 : 0);
+                deathSprite.setDepth(10);
+                deathSprite.setOrigin(0.5, 0.5);
+                this.activeDeathSprite = deathSprite;
+
+                if (this.scene.anims.exists(animKey)) {
+                    deathSprite.play(animKey);
+                }
+
+                // Smoothly drown and sink deep into the molten lava block while melting away
+                this.scene.tweens.add({
+                    targets: deathSprite,
+                    y: deathY + 24,
+                    alpha: { from: 1, to: 0 },
+                    duration: effectDuration,
+                    ease: 'Sine.easeIn',
+                    onComplete: () => {
+                        if (deathSprite.active) deathSprite.destroy();
+                        if (this.activeDeathSprite === deathSprite) this.activeDeathSprite = undefined;
+                        this.finishRespawn();
+                    }
+                });
+            } else {
+                this.scene.time.delayedCall(effectDuration, () => {
+                    this.finishRespawn();
+                });
+            }
+        } else {
+            // Normal death effect (black soul floating upwards and fading out)
+            const effectDuration = 380;
+            if (this.scene.textures.exists('death-effect')) {
+                const deathSprite = this.scene.add.sprite(deathX, deathY, 'death-effect', 2);
+                deathSprite.setDepth(10);
+                deathSprite.setOrigin(0.5, 0.5);
+                this.activeDeathSprite = deathSprite;
+
+                if (this.scene.anims.exists('death-effect-anim')) {
+                    deathSprite.play('death-effect-anim');
+                }
+
+                this.scene.tweens.add({
+                    targets: deathSprite,
+                    y: deathY - 32,
+                    alpha: 0,
+                    duration: effectDuration,
+                    ease: 'Cubic.easeOut',
+                    onComplete: () => {
+                        if (deathSprite.active) deathSprite.destroy();
+                        if (this.activeDeathSprite === deathSprite) this.activeDeathSprite = undefined;
+                        this.finishRespawn();
+                    }
+                });
+            } else {
+                this.scene.time.delayedCall(effectDuration, () => {
+                    this.finishRespawn();
+                });
+            }
+        }
     }
 }

@@ -13,6 +13,9 @@
 ## 📋 Task List
 
 ### ✅ Completed
+- [x] **Static "Press E To Enter" Door Prompt**: Made the door interaction prompt stationary above the entrance rather than floating dynamically with player coordinates.
+- [x] **Transparent Jump Mechanics Guide at Start**: Added subtle, semi-transparent in-world tutorial description near spawn explaining jump controls (`[SPACE]` / `[W]` / `[↑]`) and variable jump height mechanics (Tap for Short-Hop, Hold for High Jump).
+- [x] **Mobile Device Access Guard & Restriction**: Added mobile device / touchscreen detection with a modern retro-styled desktop-only restriction overlay.
 - [x] **`[C]` Keybind for Quick Checkpoint Respawn**: Added instant reset to active checkpoint when pressing `C` (shows fallback feedback if no checkpoint is active yet).
 - [x] **Top-Right `[R+R] Restart Run` & `[ESC] Menu` HUD Buttons**: Added quick mouse-clickable buttons for instant run restart and pause menu toggling with custom hover styling.
 - [x] **`Double [R]` Keybind for Instant Run Restart**: Added double-tap confirmation on `R` key with on-screen prompt (`PRESS [R] AGAIN TO RESTART`) to prevent accidental run loss.
@@ -40,6 +43,7 @@
 ---
 
 ### ⏳ Immediate & Near-Term
+- [ ] **Pitfall / Falling Ground Navigation Clarity**: Make it clear at the falling-down-through-the-ground section that players cannot proceed to the right side and must fall down.
 - [ ] **Pipe Monster Pop-out Refinement**:
   - Fine-tune Pipe Monster emergence height and distance relative to the pipe's top rim so it never appears disconnected or floating above the pipe surface across all pipe placements.
 - [ ] **UI Polish & Visual Enhancements**:
@@ -61,11 +65,20 @@
 
 ---
 
-### 🌐 Backend, Leaderboard & Web3 Verification
-- [ ] **Run Payload & Score Submission API**: Send run metrics (`timeElapsedMs`, `totalDeaths`, `coinsCollected`, `enemiesKilled`, `score`, timestamp) to the Rust/PostgreSQL backend upon stage completion.
-- [ ] **Global & Community Leaderboard**: Fetch and display top speedrun times, highest scores, and lowest death runs in-game / victory screen.
-- [ ] **Anti-Cheat Verification**: Generate input timeline/hash payloads to validate legitimate clears against API spoofing.
-- [ ] **Local Storage & Offline Caching**: Cache user personal bests, high scores, and audio preferences locally as a fallback.
+### 🌐 Backend, SurrealDB & Anti-Cheat System
+- [x] **SurrealDB Backend & Database Layer**: Native SurrealQL tables (`player`, `run_session`, `leaderboard`, `whitelist`) and backend business functions (`fn::start_run`, `fn::submit_run`, `fn::get_leaderboard`).
+- [x] **Modular DB Architecture**: Abstracted into clean modular files in `src/db/` (`init.surql`, `tables/*.surql`, `functions/*.surql`).
+- [x] **Docker Compose Orchestration**: Single-command bootup (`docker compose up`) for SurrealDB engine, auto-migration service, and Vite frontend.
+- [x] **Deterministic Keystroke Input Recorder**: Client-side zero-GC frame input logger (`InputRecorder.ts`) recording inputs for backend anti-cheat verification.
+- [x] **Direct SurrealDB Client Service**: Direct WebSocket/HTTP connection via official SDK (`SurrealService.ts`) with seamless offline fallback.
+
+---
+
+### 🚀 Production & Mainnet Launch Checklist (Before Going Live)
+- [ ] **Switch SurrealQL from `OVERWRITE` to `IF NOT EXISTS`**: In `src/db/init.surql`, `src/db/tables/*.surql`, and `src/db/functions/*.surql`, change all `OVERWRITE` keywords back to `IF NOT EXISTS` so table metadata and records are never accidentally modified on live server restarts.
+- [ ] **Switch Database Name from `development` to `production`**: Update `USE DB development;` to `USE DB production;` in `init.surql`, `docker-compose.yml`, and `SurrealService.ts`.
+- [ ] **Configure Cloudflare Turnstile Live Keys**: Set production Turnstile Site Key & Secret Key in environment variables for zero-friction bot protection on run start.
+- [ ] **Configure Production SurrealDB Cloud / VPS Connection**: Provide production `VITE_SURREAL_URL`, credentials, and SSL/WSS certificates.
 
 ---
 
@@ -73,4 +86,5 @@
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
 - [ ] **Manual Monster Spritesheet Padding**: Fix / add 1-2px internal transparent margin to monster PNGs (Sandal Mob, Bonsai Gripper, Lava Kappa, Shiro Onna) to eliminate 1px top-edge border clipping without losing sprite details.
+
 

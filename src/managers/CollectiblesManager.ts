@@ -140,7 +140,25 @@ export class CollectiblesManager {
                 obj.setScale(customScale);
             }
 
-            this.scene.physics.add.existing(obj, true);
+            this.scene.physics.add.existing(obj, false);
+            const body = obj.body as Phaser.Physics.Arcade.Body;
+            if (body) {
+                body.setAllowGravity(false);
+                body.setImmovable(true);
+                
+                if (name === 'Coin') {
+                    // Visible gold coin disk is centered ~16px diameter in 32x32 frame
+                    body.setSize(18, 18);
+                    body.setOffset(7, 7);
+                } else if (name === 'GunPowerup') {
+                    body.setSize(20, 20);
+                    body.setOffset(6, 6);
+                } else if (name === 'Totem') {
+                    body.setSize(18, 22);
+                    body.setOffset(7, 5);
+                }
+            }
+
             obj.setDepth(2.8);
             obj.setData('uniqueKey', uniqueKey);
             if (anim && this.scene.anims.exists(anim)) {
@@ -161,11 +179,14 @@ export class CollectiblesManager {
     }
 
     private addHoverTween(obj: any) {
-        const body = obj.body as Phaser.Physics.Arcade.Body;
         const startY = obj.y;
         this.scene.tweens.add({ 
-            targets: obj, y: startY - 4, duration: 1000 + Math.random() * 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            onUpdate: () => { if (body && obj.active) body.y = obj.y - (obj.displayHeight * obj.originY); }
+            targets: obj, 
+            y: startY - 4, 
+            duration: 1000 + Math.random() * 500, 
+            yoyo: true, 
+            repeat: -1, 
+            ease: 'Sine.easeInOut'
         });
     }
 }

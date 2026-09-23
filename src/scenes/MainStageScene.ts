@@ -9,6 +9,8 @@ import { InventoryManager } from '../managers/InventoryManager';
 import { SoundManager } from '../managers/SoundManager';
 import { SecurityManager } from '../managers/SecurityManager';
 import { LeaderboardManager } from '../managers/LeaderboardManager';
+import { InputRecorder } from '../managers/InputRecorder';
+import { SurrealService } from '../services/SurrealService';
 
 export class MainStageScene extends Phaser.Scene {
     private player!: Player;
@@ -23,6 +25,7 @@ export class MainStageScene extends Phaser.Scene {
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
     private smashLayer?: Phaser.Tilemaps.TilemapLayer;
     private hazardsLayer?: Phaser.Tilemaps.TilemapLayer;
+    private allTilesets: Phaser.Tilemaps.Tileset[] = [];
 
     // Hardcore Speedrun & Death State
     private initialSpawnX: number = 100;
@@ -30,6 +33,7 @@ export class MainStageScene extends Phaser.Scene {
     private startTime: number = 0;
     private totalPausedTime: number = 0;
     private pauseStartTime: number = 0;
+    private deathPauseStartTime: number = 0;
     public isGamePaused: boolean = false;
     public totalDeaths: number = 0;
     private lastRPressTime: number = 0;
@@ -54,6 +58,9 @@ export class MainStageScene extends Phaser.Scene {
 
         // Tileset overlays
         this.load.image('plain-ground', 'assets/sprites/background/plainGround.png');
+        this.load.image('plainGround', 'assets/sprites/background/plainGround.png');
+        this.load.image('plain-dungeon', 'assets/sprites/background/plainDungeon.png');
+        this.load.image('plainDungeon', 'assets/sprites/background/plainDungeon.png');
 
         this.load.image('cherry blossom', 'assets/sprites/background/cherry blossom.png');
         this.load.spritesheet('dandelion', 'assets/sprites/background/dandelion flower sprite.png', { frameWidth: 32, frameHeight: 32 });
@@ -61,6 +68,10 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('water', 'assets/sprites/blocks/water.png');
         this.load.image('lava', 'assets/sprites/blocks/lava.png');
         this.load.image('bush', 'assets/sprites/background/bush.png');
+        this.load.image('mountain', 'assets/sprites/background/mountain.png');
+        this.load.image('32 files dungeon', 'assets/sprites/boss/32 files dungeon.png');
+        this.load.image('64 files dungeon', 'assets/sprites/boss/64 files dungeon.png');
+        this.load.image('cloud variation', 'assets/sprites/boss/cloud variation.png');
         this.load.image('moving-platform-img', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('wooden moving platform', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('moving-platform', 'assets/sprites/misc/moving-platform.png');
@@ -119,6 +130,56 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('player-fall-gun-r', 'assets/sprites/player/Main-Sprite-Falling-With-Gun-R.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('walk-r', 'assets/sprites/player/Main-Sprite-Walk-R.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('walk-l', 'assets/sprites/player/Main-Sprite-Walk-L.png', { frameWidth: 32, frameHeight: 32 });
+
+        // Effects
+        this.load.spritesheet('death-effect', 'assets/sprites/effects/black death effect sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('lava-death-l', 'assets/sprites/effects/lava death sprite-l.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('lava-death-r', 'assets/sprites/effects/lava death sprite-r.png', { frameWidth: 32, frameHeight: 32 });
+
+        // Auto-discover and preload all images and sprites in public/assets/ (including sprites, blocks, misc, backgrounds, etc.)
+        const autoAssetModules = import.meta.glob<{ default?: string } | string>(
+            '../../public/assets/**/*.{png,jpg,jpeg,svg,webp}', 
+            { eager: true, query: '?url', import: 'default' }
+        );
+
+        Object.entries(autoAssetModules).forEach(([path, urlValue]) => {
+            const cleanRelPath = path.replace(/^.*\/public\//, '');
+            const url = typeof urlValue === 'string' ? urlValue : (urlValue as any)?.default || cleanRelPath;
+            const fileName = cleanRelPath.split('/').pop() || '';
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            
+            const spritesSubpathMatch = cleanRelPath.match(/assets\/sprites\/(.+)\.[^/.]+$/);
+            const spritesSubpath = spritesSubpathMatch ? spritesSubpathMatch[1] : '';
+
+            const keys = new Set<string>([
+                baseName,
+                fileName,
+                cleanRelPath,
+                cleanRelPath.replace(/\.[^/.]+$/, ''),
+                cleanRelPath.replace(/^assets\//, ''),
+                cleanRelPath.replace(/^assets\//, '').replace(/\.[^/.]+$/, '')
+            ]);
+
+            if (spritesSubpath) {
+                keys.add(spritesSubpath);
+                keys.add(`sprites/${spritesSubpath}`);
+                keys.add(`sprites/${fileName}`);
+            }
+
+            const extraKeys: string[] = [];
+            keys.forEach(k => {
+                extraKeys.push(k.replace(/[-_]/g, ' '));
+                extraKeys.push(k.replace(/\s+/g, '-'));
+                extraKeys.push(k.replace(/\s+/g, '_'));
+            });
+            extraKeys.forEach(k => keys.add(k));
+
+            keys.forEach(key => {
+                if (key && !this.textures.exists(key)) {
+                    this.load.image(key, url || cleanRelPath);
+                }
+            });
+        });
     }
 
     create() {
@@ -126,18 +187,8 @@ export class MainStageScene extends Phaser.Scene {
         this.createLayers(map);
         this.createAnimations();
 
-        // Enforce clean nearest-neighbor pixel sampling on textures to prevent edge bleeding
-        const cleanTextureKeys = [
-            'player-fall', 'player-jump-fall', 'walk-r', 'walk-l', 'idle-wind-r', 'idle-wind-l',
-            'idle-r', 'idle-l', 'player-shoot',
-            'mob-sandal-l', 'mob-sandal-r', 'mob-bonsai-gripper', 'pipe-monster-l', 'pipe-monster-r',
-            'mob-pumpkin-bat', 'mob-lava-kappa', 'mob-shiro-onna', 'mob-bug-green-l',
-            'mob-bug-green-r', 'mob-bug-yellow-l', 'mob-bug-yellow-r', 'mob-devil-l',
-            'mob-devil-r', 'mob-hedgehog-l', 'mob-hedgehog-r', 'coin', 'moving-platform-img', 'wooden moving platform', 'moving-platform',
-            'cherry blossom', 'well', 'water', 'lava', 'firebar-sprite',
-            'player-fall-gun-l', 'player-fall-gun-r', 'dandelion'
-        ];
-        cleanTextureKeys.forEach(key => {
+        // Enforce clean nearest-neighbor pixel sampling on all textures to prevent edge bleeding
+        this.textures.getTextureKeys().forEach(key => {
             if (this.textures.exists(key)) {
                 this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
             }
@@ -188,6 +239,8 @@ export class MainStageScene extends Phaser.Scene {
         // Setup Level Environment Objects & Checkpoints
         this.envManager.setupCheckpoints(rawMapObjects);
         this.envManager.setupFakeGround(rawMapObjects);
+        this.envManager.setupFillGround(rawMapObjects);
+        this.envManager.setupRevealTileLayers(map, this.allTilesets);
         this.envManager.setupWindZones(rawMapObjects);
         this.envManager.setupDoors(rawMapObjects);
         this.envManager.setupGunDisarmZones(rawMapObjects);
@@ -196,6 +249,7 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.setupFirebars(rawMapObjects);
         this.envManager.setupSmashTriggers(map);
         this.envManager.setupDandelions(rawMapObjects);
+        this.envManager.setupStartTutorialCues(rawMapObjects, spawnX, spawnY);
 
         // Setup Entities & Level Objects
         this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
@@ -211,26 +265,39 @@ export class MainStageScene extends Phaser.Scene {
         
         this.collectiblesManager.setupCollectibles(map);
 
-        // Security session start
+        // Security and SurrealDB backend session start
         SecurityManager.getInstance().startNewRun('stage1');
+        InputRecorder.getInstance().start();
+        SurrealService.getInstance().startRun();
 
         // Checkpoint snapshot listener
         this.events.on('checkpoint-saved', () => {
             this.collectiblesManager.saveCheckpointSnapshot();
             this.enemyManager.saveCheckpointSnapshot();
             this.inventoryManager.saveCheckpointSnapshot();
+            this.envManager.saveCheckpointSnapshot();
             SecurityManager.getInstance().recordEvent('CHECKPOINT', { x: this.player.x, y: this.player.y });
         });
 
-        // Player death event: rollback state to active checkpoint snapshot
+        // Player death event: rollback state to active checkpoint snapshot and pause run timer
         this.events.on('player-death', () => {
+            this.deathPauseStartTime = this.time.now;
             this.totalDeaths++;
             SecurityManager.getInstance().recordDeath(this.totalDeaths);
             SecurityManager.getInstance().recordEvent('DEATH', { x: this.player.x, y: this.player.y, deaths: this.totalDeaths });
             this.collectiblesManager.rollbackToCheckpoint();
             this.enemyManager.rollbackToCheckpoint();
             this.inventoryManager.rollbackToCheckpoint();
+            this.envManager.rollbackToCheckpoint();
             this.player.bullets.clear(true, true);
+        });
+
+        // Player respawn event: resume timer after death animation completes
+        this.events.on('player-respawn', () => {
+            if (this.deathPauseStartTime > 0) {
+                this.totalPausedTime += (this.time.now - this.deathPauseStartTime);
+                this.deathPauseStartTime = 0;
+            }
         });
 
         // ESC, R, and C Key listeners
@@ -327,7 +394,40 @@ export class MainStageScene extends Phaser.Scene {
         }
 
         if (this.hazardsLayer) {
-            this.physics.add.overlap(this.player, this.hazardsLayer, () => this.player.die(), (_p, tile) => (tile as Phaser.Tilemaps.Tile).index !== -1);
+            this.physics.add.overlap(
+                this.player, 
+                this.hazardsLayer, 
+                (_p, tile) => {
+                    const t = tile as Phaser.Tilemaps.Tile;
+                    const isLava = t.tileset?.name === 'lava' || (t.index >= 2730 && t.index <= 2732);
+                    this.player.die(isLava ? 'lava' : 'default');
+                }, 
+                (_p, tile) => {
+                    const t = tile as Phaser.Tilemaps.Tile;
+                    if (t.index === -1) return false;
+
+                    const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+                    if (!pBody) return false;
+
+                    const isLava = t.tileset?.name === 'lava' || (t.index >= 2730 && t.index <= 2732);
+                    const tileTop = t.pixelY;
+                    const tileBottom = t.pixelY + t.height;
+                    const tileLeft = t.pixelX;
+                    const tileRight = t.pixelX + t.width;
+
+                    if (isLava) {
+                        // Lava: player must visibly fall inside the molten liquid (down at least 10px into the tile)
+                        const isHorizontallyInLava = pBody.right > tileLeft + 3 && pBody.left < tileRight - 3;
+                        const isVerticallyInLava = pBody.bottom >= tileTop + 10 && pBody.top <= tileBottom;
+                        return isHorizontallyInLava && isVerticallyInLava;
+                    } else {
+                        // Spikes / other hazards: pixel-accurate inner bounding box to prevent clipping air margins
+                        const isHorizontallyTouching = pBody.right >= tileLeft + 6 && pBody.left <= tileRight - 6;
+                        const isVerticallyTouching = pBody.bottom >= tileTop + 8 && pBody.top <= tileBottom - 4;
+                        return isHorizontallyTouching && isVerticallyTouching;
+                    }
+                }
+            );
         }
 
         this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -399,6 +499,11 @@ export class MainStageScene extends Phaser.Scene {
         if (this.isGamePaused) {
             this.resumeGame();
         }
+        if (this.deathPauseStartTime > 0) {
+            this.totalPausedTime += (this.time.now - this.deathPauseStartTime);
+            this.deathPauseStartTime = 0;
+        }
+        this.player.cancelDeathEffect();
         this.uiManager.hideDeathScreen();
         this.uiManager.hidePauseMenu();
         this.totalDeaths++;
@@ -416,6 +521,7 @@ export class MainStageScene extends Phaser.Scene {
         this.collectiblesManager.rollbackToCheckpoint();
         this.enemyManager.rollbackToCheckpoint();
         this.inventoryManager.rollbackToCheckpoint();
+        this.envManager.rollbackToCheckpoint();
         this.player.bullets.clear(true, true);
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RESPAWNED AT CHECKPOINT', '#38BDF8', 1200);
@@ -426,9 +532,11 @@ export class MainStageScene extends Phaser.Scene {
         if (this.isGamePaused) {
             this.resumeGame();
         }
+        this.player.cancelDeathEffect();
         this.uiManager.hideDeathScreen();
         this.uiManager.hidePauseMenu();
         this.totalDeaths = 0;
+        this.deathPauseStartTime = 0;
         this.startTime = this.time.now;
         this.totalPausedTime = 0;
 
@@ -453,14 +561,21 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.resetAll();
         this.envManager.resetCheckpoints();
         SecurityManager.getInstance().startNewRun('stage1');
+        InputRecorder.getInstance().reset();
+        SurrealService.getInstance().startRun();
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RUN RESTARTED', '#38BDF8', 1200);
         this.soundManager?.playPowerup();
     }
 
-    private getFormattedElapsedTime(): string {
+    public getElapsedMilliseconds(): number {
         const currentPauseOffset = this.isGamePaused ? (this.time.now - this.pauseStartTime) : 0;
-        const elapsedMs = Math.max(0, this.time.now - this.startTime - this.totalPausedTime - currentPauseOffset);
+        const currentDeathOffset = (this.player && this.player.isDying && this.deathPauseStartTime > 0) ? (this.time.now - this.deathPauseStartTime) : 0;
+        return Math.max(0, this.time.now - this.startTime - this.totalPausedTime - currentPauseOffset - currentDeathOffset);
+    }
+
+    private getFormattedElapsedTime(): string {
+        const elapsedMs = this.getElapsedMilliseconds();
         const minutes = Math.floor(elapsedMs / 60000);
         const seconds = Math.floor((elapsedMs % 60000) / 1000);
         const millis = Math.floor(elapsedMs % 1000);
@@ -485,6 +600,12 @@ export class MainStageScene extends Phaser.Scene {
         const movingPlatformTileset = map.addTilesetImage('moving-platform', 'moving-platform');
         const woodenPlatformTileset = map.addTilesetImage('wooden moving platform', 'wooden moving platform');
         const jumpPadTileset = map.addTilesetImage('jump-pad', 'jump-pad-img');
+        const mountainTileset = map.addTilesetImage('mountain', 'mountain');
+        const dungeon32Tileset = map.addTilesetImage('32 files dungeon', '32 files dungeon');
+        const dungeon64Tileset = map.addTilesetImage('64 files dungeon', '64 files dungeon');
+        const cloudVariationTileset = map.addTilesetImage('cloud variation', 'cloud variation');
+        const plainDungeonTileset = map.addTilesetImage('plainDungeon', 'plainDungeon') || map.addTilesetImage('plain-dungeon', 'plain-dungeon');
+        const plainGroundTileset = map.addTilesetImage('plainGround', 'plainGround') || map.addTilesetImage('plain-ground', 'plain-ground');
 
         const allTilesets = [
             levelObjectsTileset,
@@ -503,39 +624,91 @@ export class MainStageScene extends Phaser.Scene {
             dandelionTileset,
             movingPlatformTileset,
             woodenPlatformTileset,
-            jumpPadTileset
+            jumpPadTileset,
+            mountainTileset,
+            dungeon32Tileset,
+            dungeon64Tileset,
+            cloudVariationTileset,
+            plainDungeonTileset,
+            plainGroundTileset
         ].filter(Boolean) as Phaser.Tilemaps.Tileset[];
 
-        map.createLayer('Sky', allTilesets, 0, 0)?.setDepth(0);
-        map.createLayer('Trees', allTilesets, 0, 0)?.setDepth(1);
-        map.createLayer('Background', allTilesets, 0, 0)?.setDepth(2);
+        // Automatically link any tilesets referenced in map.tilesets that match loaded textures
+        if (map.tilesets && map.tilesets.length > 0) {
+            map.tilesets.forEach(ts => {
+                if (!allTilesets.some(t => t.name === ts.name)) {
+                    const candidates = [
+                        ts.name,
+                        ts.name.replace(/\.[^/.]+$/, ''),
+                        ts.name.replace(/[-_]/g, ' '),
+                        ts.name.replace(/\s+/g, '-'),
+                        ts.name.replace(/\s+/g, '_'),
+                        ts.name.split('/').pop() || '',
+                        (ts.name.split('/').pop() || '').replace(/\.[^/.]+$/, '')
+                    ];
+                    const matchedKey = candidates.find(k => k && this.textures.exists(k));
+                    if (matchedKey) {
+                        const added = map.addTilesetImage(ts.name, matchedKey);
+                        if (added) allTilesets.push(added);
+                    }
+                }
+            });
+        }
+
+        this.allTilesets = allTilesets;
+
+        map.createLayer('Sky', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Sky', 0));
+        map.createLayer('Trees', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Trees', 1));
+        map.createLayer('Background', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Background', 2));
         
         const transparentLayer = map.createLayer('Transparent', allTilesets, 0, 0);
         if (transparentLayer) {
-            transparentLayer.setDepth(2.7);
+            transparentLayer.setDepth(this.getTiledLayerDepth(map, 'Transparent', 2.7));
         }
 
         this.groundLayer = map.createLayer('Ground', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
-        this.groundLayer.setDepth(3);
+        this.groundLayer.setDepth(this.getTiledLayerDepth(map, 'Ground', 3));
         this.groundLayer.setCollisionByExclusion([-1]);
-
-        this.oneWayLayer = map.createLayer('OneWayPlatforms', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
-        this.oneWayLayer.setDepth(4);
-        this.oneWayLayer.setCollisionByExclusion([-1]);
 
         this.smashLayer = (map.createLayer('SmashGround', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
         if (this.smashLayer) {
-            this.smashLayer.setDepth(4);
+            this.smashLayer.setDepth(this.getTiledLayerDepth(map, 'SmashGround', 3.1));
             this.smashLayer.setCollisionByExclusion([-1]);
         }
 
+        this.oneWayLayer = map.createLayer('OneWayPlatforms', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
+        this.oneWayLayer.setDepth(this.getTiledLayerDepth(map, 'OneWayPlatforms', 3.2));
+        this.oneWayLayer.setCollisionByExclusion([-1]);
+
         this.hazardsLayer = (map.createLayer('Hazards', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
         if (this.hazardsLayer) {
-            this.hazardsLayer.setDepth(5);
+            this.hazardsLayer.setDepth(this.getTiledLayerDepth(map, 'Hazards', 3.3));
             this.hazardsLayer.setCollisionByExclusion([-1]);
         }
 
-        map.createLayer('Foreground', allTilesets, 0, 0)?.setDepth(7);
+        map.createLayer('Foreground', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Foreground', 8));
+    }
+
+    private getTiledLayerDepth(map: Phaser.Tilemaps.Tilemap, layerName: string, fallbackDepth: number): number {
+        const layerData = map.layers.find(l => l.name === layerName);
+        if (layerData) {
+            const rawProps = (layerData as any).properties;
+            if (rawProps && Array.isArray(rawProps)) {
+                const depthProp = rawProps.find((p: any) => 
+                    p.name && (
+                        p.name.toLowerCase() === 'depth' || 
+                        p.name.toLowerCase() === 'zindex' || 
+                        p.name.toLowerCase() === 'z-index' || 
+                        p.name.toLowerCase() === 'z_index' ||
+                        p.name.toLowerCase() === 'layerdepth'
+                    )
+                );
+                if (depthProp && depthProp.value !== undefined) {
+                    return Number(depthProp.value);
+                }
+            }
+        }
+        return fallbackDepth;
     }
 
     private createAnimations() {
@@ -551,6 +724,40 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'fall-gun-r-anim', frames: this.anims.generateFrameNumbers('player-fall-gun-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
         
+        // Death Effect: play 32x32 frames from bottom to top (frame 2 -> 1 -> 0)
+        this.anims.create({
+            key: 'death-effect-anim',
+            frames: [
+                { key: 'death-effect', frame: 2 },
+                { key: 'death-effect', frame: 1 },
+                { key: 'death-effect', frame: 0 }
+            ],
+            frameRate: 10,
+            repeat: 0
+        });
+
+        // Lava Death Effects (Left: frame 0 -> 5; Right: frame 5 -> 0)
+        this.anims.create({
+            key: 'lava-death-l-anim',
+            frames: this.anims.generateFrameNumbers('lava-death-l', { start: 0, end: 5 }),
+            frameRate: 14,
+            repeat: 0
+        });
+
+        this.anims.create({
+            key: 'lava-death-r-anim',
+            frames: [
+                { key: 'lava-death-r', frame: 5 },
+                { key: 'lava-death-r', frame: 4 },
+                { key: 'lava-death-r', frame: 3 },
+                { key: 'lava-death-r', frame: 2 },
+                { key: 'lava-death-r', frame: 1 },
+                { key: 'lava-death-r', frame: 0 }
+            ],
+            frameRate: 14,
+            repeat: 0
+        });
+
         // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });
 
@@ -623,13 +830,18 @@ export class MainStageScene extends Phaser.Scene {
         this.inventoryManager.update();
         this.enemyManager.update(this.groundLayer, this.oneWayLayer, delta);
         SecurityManager.getInstance().logPlayerPosition(this.player.x, this.player.y);
+
+        const currentFrame = Math.floor((this.time.now - this.startTime) / 16.6667);
+        InputRecorder.getInstance().logFrame(currentFrame, this.player.getActiveKeys());
     }
 
     public onStageComplete() {
+        const netDurationMs = Math.round(this.getElapsedMilliseconds());
         const payload = SecurityManager.getInstance().finishRun(
             this.collectiblesManager.coinsCollected,
             this.enemyManager.enemiesKilled,
-            this.totalDeaths
+            this.totalDeaths,
+            netDurationMs
         );
         LeaderboardManager.getInstance().submitRun(payload, 'Speedy Onion');
         LeaderboardManager.getInstance().showLeaderboardModal(this, this.soundManager);
