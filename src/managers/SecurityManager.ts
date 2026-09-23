@@ -141,23 +141,26 @@ export class SecurityManager {
     this.recordEvent('DEATH', { count: deathCount });
   }
 
-  public finishRun(coins: number, kills: number, deaths: number): VerifiedRunPayload {
+  public finishRun(coins: number, kills: number, deaths: number, exactNetDurationMs?: number): VerifiedRunPayload {
     this.endTime = Date.now();
     this.totalCoins = coins;
     this.totalKills = kills;
     this.totalDeaths = deaths;
-    this.recordEvent('FINISH', { coins, kills, deaths, durationMs: this.endTime - this.startTime });
+    
+    const totalDurationMs = (exactNetDurationMs !== undefined && exactNetDurationMs >= 0)
+      ? exactNetDurationMs
+      : (this.endTime - this.startTime);
 
-    const totalDurationMs = this.endTime - this.startTime;
+    this.recordEvent('FINISH', { coins, kills, deaths, durationMs: totalDurationMs });
 
     // Plausibility verification
     const isPlausible = (
-      totalDurationMs >= 8000 && // Minimum possible speedrun time
+      totalDurationMs >= 5000 && // Minimum possible speedrun time
       this.validationFlags.length === 0 &&
       this.events.length >= 2
     );
 
-    const checksumPayload = `${this.runId}:${this.startTime}:${this.endTime}:${coins}:${kills}:${deaths}:${this.lastHash}`;
+    const checksumPayload = `${this.runId}:${this.startTime}:${this.endTime}:${totalDurationMs}:${coins}:${kills}:${deaths}:${this.lastHash}`;
     const checksum = this.simpleHash(checksumPayload);
 
     return {

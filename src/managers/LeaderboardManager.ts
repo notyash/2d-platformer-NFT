@@ -2,6 +2,8 @@
 import Phaser from 'phaser';
 import type { VerifiedRunPayload } from './SecurityManager';
 import { SoundManager } from './SoundManager';
+import { SurrealService } from '../services/SurrealService';
+import { InputRecorder } from './InputRecorder';
 
 export interface LeaderboardEntry {
   rank?: number;
@@ -128,6 +130,18 @@ export class LeaderboardManager {
     this.saveEntries();
 
     const finalRank = this.entries.findIndex(e => e.runId === payload.runId) + 1;
+
+    // Direct submit to SurrealDB backend layer
+    SurrealService.getInstance().submitRun(
+      payload,
+      InputRecorder.getInstance().getInputs(),
+      playerName,
+      walletAddress
+    ).then(surrealResult => {
+      console.log('[SurrealDB] Submission result:', surrealResult);
+    }).catch(err => {
+      console.warn('[SurrealDB] Async submit error:', err);
+    });
 
     // Dispatch global window event for web app / NFT dApp integration
     if (typeof window !== 'undefined') {

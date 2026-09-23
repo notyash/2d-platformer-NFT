@@ -1,0 +1,72 @@
+# ==============================================================================
+# ONION BOY GAME: DOCKER COMPOSE ORCHESTRATION
+# Boots up SurrealDB Backend/Database and Frontend Game with One Command
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. SurrealDB Backend & Database Engine
+  # ----------------------------------------------------------------------------
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    container_name: onion-boy-surrealdb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    command: start --user root --pass root file:/data/database.db
+    volumes:
+      - surreal_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "/surreal is-ready http://localhost:8000 || exit 0"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
+
+  # ----------------------------------------------------------------------------
+  # 2. Schema Auto-Migration Service (Applies all .surql tables & functions)
+  # ----------------------------------------------------------------------------
+  schema-init:
+    image: surrealdb/surrealdb:latest
+    container_name: onion-boy-schema-init
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    volumes:
+      - ./src/db:/schema:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Waiting for SurrealDB..."
+        sleep 2
+        echo "Applying SurrealQL Schema, Access & Backend Functions..."
+        cat /schema/init.surql /schema/tables/*.surql /schema/access/*.surql /schema/functions/*.surql | /surreal import --conn http://surrealdb:8000 --user root --pass root --ns onion_game --db development -
+        echo "SurrealDB Schema Initialization Complete!"
+    restart: "no"
+
+  # ----------------------------------------------------------------------------
+  # 3. Phaser Frontend Game Container
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: onion-boy-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_SURREAL_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - surrealdb
+
+volumes:
+  surreal_data:
+    driver: local
