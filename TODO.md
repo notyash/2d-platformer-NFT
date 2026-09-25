@@ -2,9 +2,9 @@
 
 ## 🎮 Project Scope & Design Decisions
 - **Target Platform**: Desktop-first keyboard & mouse controls (`WASD` / `Arrows`, `Space` / `W` to Jump, `Left-Click` / `Left Ctrl` to Shoot, `[E]` to Activate Totem, `[C]` to Respawn at Checkpoint, `Double [R]` or Top-Right button to Restart Run, `[ESC]` or Top-Right button for Pause Menu).
-- **Boss Encounter**: Optional single mini-boss encounter at the end of the stage.
-- **Economy**: Defeating enemies (mobs, pipe monsters, shooters) awards +1 Coin.
-- **Backend & Web3 Integration**: Runs communicate with Rust/PostgreSQL backend for secure leaderboard logging, whitelist qualification, and anti-cheat verification.
+- **Fullscreen Adaptive Scaling**: Dynamic aspect-ratio viewport (`baseHeight = 480`, `width = Math.round(480 * ratio)`) with `Phaser.Scale.FIT` and `CENTER_BOTH` to fill all screen dimensions without black sidebars.
+- **Economy**: Defeating enemies (mobs, pipe monsters, shooters) awards Coins (+1 to +3 depending on enemy type).
+- **Backend & Web3 Integration**: Direct SurrealDB backend architecture (no intermediate API layer) handling speedrun anti-cheat, session verification, global leaderboards, and whitelist issuance.
 - **Always-Equipped Abilities**: No hotbar switching. `Left Click` or `Left Ctrl` shoots Blaster and `[E]` activates Shield Totem directly.
 - **Checkpoint Architecture**: Generalized Custom Checkpoints (`Checkpoint1Zone` -> `Checkpoint1`, `Checkpoint2Zone` -> `Checkpoint2`). Dying, pressing `[C]`, or selecting "Respawn at Checkpoint" rolls back state to checkpoint snapshot (respawns items/mobs ahead of checkpoint, keeps prior progress saved).
 
@@ -13,6 +13,27 @@
 ## 📋 Task List
 
 ### ✅ Completed
+- [x] **Simple Death Effect**: Directional left/right player elimination death animation sequences using `simple death sprite.png` (`simple-death-l-anim` & `simple-death-r-anim`) with particle bursts.
+- [x] **Electric Death Effect**: Directional left/right electric shock / thunder strike death animation sequences using `electric death sprite.png` (`electric-death-l-anim` & `electric-death-r-anim`).
+- [x] **Active Gameplay Run Timer**: Accurate delta-based run timer (`activeRunTimeMs`) that strictly accumulates during active gameplay and pauses seamlessly during death animations, checkpoint respawns, and pause menus.
+- [x] **New Custom Mobs (Lantern Spirit & Shapeshifter Fox)**:
+  - Added `Lantern-Spirit-L.png` & generated pixel-flipped `Lantern-Spirit-R.png` (96x32, 3 frames).
+  - Added `Shapeshifter-Fox-L.png` & generated pixel-flipped `Shapeshifter-Fox-R.png` (128x32, 4 frames).
+  - Added Tiled custom property & name support (`type: "lantern-spirit"` / `"shapeshifter-fox"`, `LanternSpirit` / `ShapeshifterFox`).
+  - Removed all deprecated `devil`, `bug`, and `hedgehog` sprites, preloads, and animations.
+  - Converted `PipeMonster` to use `mob-bonsai-gripper` (carnivorous plant) to prevent missing texture references.
+- [x] **Responsive Fullscreen Viewport Scaling**:
+  - Implemented dynamic aspect-ratio viewport expansion in `src/main.ts` locking vertical height to 15 tiles (480px) while dynamically expanding horizontal width to fill widescreen displays without black pillarboxes.
+  - Converted HUD elements, modals, floating notifications, and pause overlays in `UIManager.ts` and `InventoryManager.ts` to dynamic screen-relative coordinate getters (`scale.width`, `scale.height`).
+- [x] **Direct SurrealDB Backend & Database Architecture**:
+  - Modular SurrealQL schemas in `src/db/` (`init.surql`, `tables/*.surql`, `functions/*.surql`).
+  - Implemented server-side functions: `fn::start_run`, `fn::submit_run` (anti-cheat speed verification, ranking, whitelist allocation), and `fn::get_leaderboard`.
+  - Configured `development` namespace/database with `OVERWRITE` definitions for rapid local iteration.
+  - Client-side direct SDK service (`SurrealService.ts`) with offline graceful fallback and Web3 wallet sign-in support.
+- [x] **Docker Compose Full-Stack Orchestration**:
+  - Configured `Dockerfile` (Node 20 Alpine) and `docker-compose.yml` to boot SurrealDB, execute schema migrations, and serve the Vite frontend with a single command (`docker compose up`).
+- [x] **Deterministic Keystroke Input Recorder**:
+  - Client-side zero-GC frame ring buffer (`InputRecorder.ts`) recording player keystrokes at 60 ticks/sec for backend anti-cheat re-simulation.
 - [x] **Static "Press E To Enter" Door Prompt**: Made the door interaction prompt stationary above the entrance rather than floating dynamically with player coordinates.
 - [x] **Transparent Jump Mechanics Guide at Start**: Added subtle, semi-transparent in-world tutorial description near spawn explaining jump controls (`[SPACE]` / `[W]` / `[↑]`) and variable jump height mechanics (Tap for Short-Hop, Hold for High Jump).
 - [x] **Mobile Device Access Guard & Restriction**: Added mobile device / touchscreen detection with a modern retro-styled desktop-only restriction overlay.
@@ -43,46 +64,21 @@
 ---
 
 ### ⏳ Active Development & Asset Pipeline
-- [ ] **1. Replace 2 Old Mobs**: Swap out 2 old mobs from the free asset pack with new designated mob sprites.
-- [ ] **2. Skeleton Bomb Minion Mob**: Add skeleton bomb mob as the summonable minion that the Elecking Boss spawns on the ground (max 2 waves per fight).
+- [ ] **1. Cloudflare Turnstile Verification Widget**: Add free Turnstile bot protection widget to start-run UI and validate Turnstile tokens in `SurrealService.startRun()`.
+- [ ] **2. Web3 Wallet Connection (EIP-712 / SIWE)**: Connect browser wallet (MetaMask, Phantom, Wagmi) to authenticate sessions and sign run verification proofs.
 - [ ] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
 - [ ] **4. New Checkpoint Asset**: Replace/upgrade the checkpoint banner and visual pole/flag assets.
 - [ ] **5. Bridge Smash Ground Asset**: Add bridge sprite as the new destructible / smash ground asset.
 - [ ] **6. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
 - [ ] **7. New Bullet Sprite**: Upgrade the blaster projectile sprite and impact animations.
-- [ ] **8. All Orbs Assets**: Integrate dedicated sprites for all boss fight orbs (Gravity Orbs, Orbs of Rage, and Orb of Victory).
-- [ ] **9. Redesign Stage Below First Smash Ground**: Overhaul and rebalance the level design in the lower stage section beneath the first smash ground.
-- [ ] **10. Totem Respawn Animation**: Add dedicated activation and revival animation sequence for the Totem of Undying.
-- [ ] **11. Simple Death Effect**: Implement standard player elimination visual FX and particle burst.
-- [ ] **12. Electric Death Effect**: Implement electric shock / thunder strike death animation and effects (`cloud attack1.png` - `cloud attack5.png`).
-- [ ] **13. Gun Movement Effects (Walking & Falling)**: Add specialized walking and airborne/falling animation frames while holding the Blaster Gun.
-- [ ] **14. New Jump Pad Asset & Mechanics**: Add spring / jump pad asset with physics bounce trajectory.
-- [ ] **15. Improve Background**: Enhance multi-layer parallax backgrounds, atmospheric lighting, and world depth.
-- [ ] **16. UI Polish & Visual Glassmorphism**:
+- [ ] **8. Redesign Stage Below First Smash Ground**: Overhaul and rebalance the level design in the lower stage section beneath the first smash ground.
+- [ ] **9. Totem Respawn Animation**: Add dedicated activation and revival animation sequence for the Totem of Undying.
+- [ ] **10. Gun Movement Effects (Walking & Falling)**: Add specialized walking and airborne/falling animation frames while holding the Blaster Gun.
+- [ ] **11. Improve Background**: Enhance multi-layer parallax backgrounds, atmospheric lighting, and world depth.
+- [ ] **12. UI Polish & Visual Glassmorphism**:
   - Modernize HUD design with crisp retro glassmorphism, responsive status bars, and vibrant equipment status cards.
   - Refine pause menu and overlay layouts, improving button hover effects, typography, and spacing.
   - Add micro-animations and smooth transition effects for banners (checkpoint notifications, respawn alerts, timer cues).
-
----
-
-### 👾 Boss Encounter (Elecking)
-- [ ] **Elecking Boss State Machine & Logic**:
-  - Ground & Air hovering behavior (instant player death on physical contact).
-  - Gravity Orbs mechanics to ground the boss.
-  - Patterned Thunder/Lightning attack with vanishing boss phase and strikable ground tiles (`dotNumber`).
-  - Orbs of Rage projectile attacks while grounded.
-  - Temporary Cloud Platforms appearing/disappearing for vertical evasion.
-  - Skeleton Bomb mob summon at 35 HP and 15 HP thresholds (50 total HP).
-  - Orb of Victory spawn upon boss defeat.
-
----
-
-### 🌐 Backend, SurrealDB & Anti-Cheat System
-- [x] **SurrealDB Backend & Database Layer**: Native SurrealQL tables (`player`, `run_session`, `leaderboard`, `whitelist`) and backend business functions (`fn::start_run`, `fn::submit_run`, `fn::get_leaderboard`).
-- [x] **Modular DB Architecture**: Abstracted into clean modular files in `src/db/` (`init.surql`, `tables/*.surql`, `functions/*.surql`, `access/*.surql`).
-- [x] **Docker Compose Orchestration**: Single-command bootup (`docker compose up`) for SurrealDB engine, auto-migration service, and Vite frontend.
-- [x] **Deterministic Keystroke Input Recorder**: Client-side zero-GC frame input logger (`InputRecorder.ts`) recording inputs for backend anti-cheat verification.
-- [x] **Direct SurrealDB Client Service**: Direct WebSocket/HTTP connection via official SDK (`SurrealService.ts`) with Web3 wallet record auth (`signinWithWallet`).
 
 ---
 
@@ -97,7 +93,3 @@
 ### 🎨 Gameplay Polish & World Expansion
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
-- [ ] **Manual Monster Spritesheet Padding**: Fix / add 1-2px internal transparent margin to monster PNGs to eliminate 1px border clipping.
-
-
-

@@ -32,10 +32,7 @@ export class MainStageScene extends Phaser.Scene {
     // Hardcore Speedrun & Death State
     private initialSpawnX: number = 100;
     private initialSpawnY: number = 100;
-    private startTime: number = 0;
-    private totalPausedTime: number = 0;
-    private pauseStartTime: number = 0;
-    private deathPauseStartTime: number = 0;
+    private activeRunTimeMs: number = 0;
     public isGamePaused: boolean = false;
     public totalDeaths: number = 0;
     private lastRPressTime: number = 0;
@@ -79,29 +76,21 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('spike', 'assets/sprites/misc/spike.png');
         this.load.image('misc/spike', 'assets/sprites/misc/spike.png');
         this.load.image('blocks/spike', 'assets/sprites/blocks/spike.png');
-        this.load.image('pipe-monster-l', 'assets/sprites/monsters/Devil_Red_Stand_L.png');
-        this.load.image('pipe-monster-r', 'assets/sprites/monsters/Devil_Red_Stand_R.png');
-        this.load.image('jump-pad-img', 'assets/sprites/misc/jump-pad.png');
+        this.load.image('jump-pad-img', 'assets/sprites/misc/jumppad sprite.png');
         this.load.spritesheet('coin', 'assets/sprites/collectibles/new coin sprite.png', { frameWidth: 32, frameHeight: 32 });
-        
-        // Bullet spritesheet (16x16 grid from All_Fire_Bullet_Pixel_16x16_04.png)
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
         this.load.spritesheet('firebar-sprite', 'assets/sprites/misc/firebar sprite.png', { frameWidth: 32, frameHeight: 64 });
         this.load.spritesheet('enemy-fireball', 'assets/sprites/misc/fireball sprite.png', { frameWidth: 32, frameHeight: 32 });
 
-        // Mob Sprites (Bug, Devil, Hedgehog, Bonsai Gripper, Pumpkin Bat, Sandal)
-        this.load.spritesheet('mob-bug-green-l', 'assets/sprites/monsters/Bug_42x30_Green_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-bug-green-r', 'assets/sprites/monsters/Bug_42x30_Green_Walk_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-bug-yellow-l', 'assets/sprites/monsters/Bug_42x30_Yellow_Walk_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-bug-yellow-r', 'assets/sprites/monsters/Bug_42x30_Yellow_Walk_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-devil-l', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_L_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-devil-r', 'assets/sprites/monsters/Devil_42x30_Red_Walk1_R_Anim.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-hedgehog-l', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_L.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-hedgehog-r', 'assets/sprites/monsters/Hedgehog_42x30_Purple_Walk_R.png', { frameWidth: 42, frameHeight: 30 });
-        this.load.spritesheet('mob-bonsai-gripper', 'assets/sprites/monsters/Bonsai Gripper.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('mob-pumpkin-bat', 'assets/sprites/monsters/Pumpkin Bat.png', { frameWidth: 32, frameHeight: 32 });
+        // Mob Sprites (Sandal, Lantern Spirit, Shapeshifter Fox, Bonsai Gripper, Pumpkin Bat, Lava Kappa, Shiro Onna)
         this.load.spritesheet('mob-sandal-l', 'assets/sprites/monsters/Sandal-Mob-L.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('mob-sandal-r', 'assets/sprites/monsters/Sandal-Mob-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-lantern-spirit-l', 'assets/sprites/monsters/Lantern-Spirit-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-lantern-spirit-r', 'assets/sprites/monsters/Lantern-Spirit-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-shapeshifter-fox-l', 'assets/sprites/monsters/Shapeshifter-Fox-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-shapeshifter-fox-r', 'assets/sprites/monsters/Shapeshifter-Fox-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-bonsai-gripper', 'assets/sprites/monsters/Bonsai Gripper.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('mob-pumpkin-bat', 'assets/sprites/monsters/Pumpkin Bat.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('mob-lava-kappa', 'assets/sprites/monsters/Lava Kappa.png', { frameWidth: 32, frameHeight: 32 });
         this.load.image('mob-shiro-onna', 'assets/sprites/monsters/Shiro Onna.png');
 
@@ -120,23 +109,16 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('wind-particle', windParticleSvg);
 
         // Player Sprites
-        this.load.image('idle-r', 'assets/sprites/player/Main-Sprite-Standing-R.png');
-        this.load.image('idle-l', 'assets/sprites/player/Main-Sprite-Standing-L.png');
-        this.load.spritesheet('idle-wind-r', 'assets/sprites/player/Main-Sprite-Idle-R.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('idle-wind-l', 'assets/sprites/player/Main-Sprite-Idle-L.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('player-shoot', 'assets/sprites/player/Sprite-Shoot.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('player-jump-fall', 'assets/sprites/player/Main-Sprite-Jump-Fall.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('player-fall', 'assets/sprites/player/Main-Sprite-Falling.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.image('jump-r', 'assets/sprites/player/Melissa_Jump1_R.png');
-        this.load.image('jump-l', 'assets/sprites/player/Melissa_Jump1_L.png');
-        this.load.image('fall-r', 'assets/sprites/player/Melissa_Fall2_R.png');
-        this.load.spritesheet('player-fall-gun-l', 'assets/sprites/player/Main-Sprite-Falling-With-Gun-L.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('player-fall-gun-r', 'assets/sprites/player/Main-Sprite-Falling-With-Gun-R.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('walk-r', 'assets/sprites/player/Main-Sprite-Walk-R.png', { frameWidth: 32, frameHeight: 32 });
-        this.load.spritesheet('walk-l', 'assets/sprites/player/Main-Sprite-Walk-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.image('idle-r', 'assets/sprites/player/Player-Standing-R.png');
+        this.load.image('idle-l', 'assets/sprites/player/Player-Standing-L.png');
+        this.load.spritesheet('idle-wind-r', 'assets/sprites/player/Player-Idle-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('idle-wind-l', 'assets/sprites/player/Player-Idle-L.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-jump', 'assets/sprites/player/Player-Jump.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('player-fall', 'assets/sprites/player/Player-Falling.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('walk-r', 'assets/sprites/player/Player-Walk-R.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('walk-l', 'assets/sprites/player/Player-Walk-L.png', { frameWidth: 32, frameHeight: 32 });
 
         // Effects
-        this.load.spritesheet('death-effect', 'assets/sprites/effects/black death effect sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('electric-death', 'assets/sprites/effects/electric death sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('simple-death', 'assets/sprites/effects/simple death sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('lava-death-l', 'assets/sprites/effects/lava death sprite-l.png', { frameWidth: 32, frameHeight: 32 });
@@ -318,7 +300,6 @@ export class MainStageScene extends Phaser.Scene {
 
         // Player death event: rollback state to active checkpoint snapshot and pause run timer
         this.events.on('player-death', () => {
-            this.deathPauseStartTime = this.time.now;
             this.totalDeaths++;
             SecurityManager.getInstance().recordDeath(this.totalDeaths);
             SecurityManager.getInstance().recordEvent('DEATH', { x: this.player.x, y: this.player.y, deaths: this.totalDeaths });
@@ -331,10 +312,7 @@ export class MainStageScene extends Phaser.Scene {
 
         // Player respawn event: resume timer after death animation completes
         this.events.on('player-respawn', () => {
-            if (this.deathPauseStartTime > 0) {
-                this.totalPausedTime += (this.time.now - this.deathPauseStartTime);
-                this.deathPauseStartTime = 0;
-            }
+            // Timer automatically resumes accumulating active time in update()
         });
 
         // ESC, R, and C Key listeners
@@ -496,8 +474,7 @@ export class MainStageScene extends Phaser.Scene {
         this.game.canvas.focus();
         this.input.on('pointerdown', () => this.game.canvas.focus());
 
-        this.startTime = this.time.now;
-        this.totalPausedTime = 0;
+        this.activeRunTimeMs = 0;
     }
 
     private beforeUnloadHandler = (e: BeforeUnloadEvent) => {
@@ -520,7 +497,6 @@ export class MainStageScene extends Phaser.Scene {
     private pauseGame() {
         if (this.isGamePaused) return;
         this.isGamePaused = true;
-        this.pauseStartTime = this.time.now;
         this.physics.pause();
         this.player.anims.pause();
         this.soundManager.playMenuSelect();
@@ -545,7 +521,6 @@ export class MainStageScene extends Phaser.Scene {
     private resumeGame() {
         if (!this.isGamePaused) return;
         this.isGamePaused = false;
-        this.totalPausedTime += (this.time.now - this.pauseStartTime);
         this.physics.resume();
         this.player.anims.resume();
         this.uiManager.hidePauseMenu();
@@ -555,10 +530,6 @@ export class MainStageScene extends Phaser.Scene {
     private respawnAtActiveCheckpoint() {
         if (this.isGamePaused) {
             this.resumeGame();
-        }
-        if (this.deathPauseStartTime > 0) {
-            this.totalPausedTime += (this.time.now - this.deathPauseStartTime);
-            this.deathPauseStartTime = 0;
         }
         this.player.cancelDeathEffect();
         this.uiManager.hideDeathScreen();
@@ -593,9 +564,7 @@ export class MainStageScene extends Phaser.Scene {
         this.uiManager.hideDeathScreen();
         this.uiManager.hidePauseMenu();
         this.totalDeaths = 0;
-        this.deathPauseStartTime = 0;
-        this.startTime = this.time.now;
-        this.totalPausedTime = 0;
+        this.activeRunTimeMs = 0;
 
         // Reset spawn back to stage entrance (0%)
         this.player.spawnX = this.initialSpawnX;
@@ -626,13 +595,11 @@ export class MainStageScene extends Phaser.Scene {
     }
 
     public getElapsedMilliseconds(): number {
-        const currentPauseOffset = this.isGamePaused ? (this.time.now - this.pauseStartTime) : 0;
-        const currentDeathOffset = (this.player && this.player.isDying && this.deathPauseStartTime > 0) ? (this.time.now - this.deathPauseStartTime) : 0;
-        return Math.max(0, this.time.now - this.startTime - this.totalPausedTime - currentPauseOffset - currentDeathOffset);
+        return this.activeRunTimeMs;
     }
 
     private getFormattedElapsedTime(): string {
-        const elapsedMs = this.getElapsedMilliseconds();
+        const elapsedMs = Math.round(this.activeRunTimeMs);
         const minutes = Math.floor(elapsedMs / 60000);
         const seconds = Math.floor((elapsedMs % 60000) / 1000);
         const millis = Math.floor(elapsedMs % 1000);
@@ -778,27 +745,11 @@ export class MainStageScene extends Phaser.Scene {
     private createAnimations() {
         this.anims.create({ key: 'idle-r-anim', frames: this.anims.generateFrameNumbers('idle-wind-r', { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
         this.anims.create({ key: 'idle-l-anim', frames: this.anims.generateFrameNumbers('idle-wind-l', { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
-        this.anims.create({ key: 'shoot-l-anim', frames: this.anims.generateFrameNumbers('player-shoot', { start: 0, end: 1 }), frameRate: 8, repeat: 0 });
-        this.anims.create({ key: 'shoot-r-anim', frames: [{ key: 'player-shoot', frame: 3 }, { key: 'player-shoot', frame: 2 }], frameRate: 8, repeat: 0 });
         this.anims.create({ key: 'walk-r-anim', frames: this.anims.generateFrameNumbers('walk-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'walk-l-anim', frames: this.anims.generateFrameNumbers('walk-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fall-l-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'fall-r-anim', frames: this.anims.generateFrameNumbers('player-fall', { start: 3, end: 5 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'fall-gun-l-anim', frames: this.anims.generateFrameNumbers('player-fall-gun-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'fall-gun-r-anim', frames: this.anims.generateFrameNumbers('player-fall-gun-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
         this.anims.create({ key: 'coin-spin', frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
-        
-        // Death Effect: play 32x32 frames from bottom to top (frame 2 -> 1 -> 0)
-        this.anims.create({
-            key: 'death-effect-anim',
-            frames: [
-                { key: 'death-effect', frame: 2 },
-                { key: 'death-effect', frame: 1 },
-                { key: 'death-effect', frame: 0 }
-            ],
-            frameRate: 10,
-            repeat: 0
-        });
 
         // Electric Death Effect (Right: top row 0..7 left-to-right; Left: bottom row 23..16 right-to-left)
         this.anims.create({
@@ -846,23 +797,23 @@ export class MainStageScene extends Phaser.Scene {
             repeat: 0
         });
 
-        // Lava Death Effects (Left: frame 0 -> 5; Right: frame 5 -> 0)
+        // Lava Death Effects (Right: frame 0 -> 5 from lava-death-r; Left: frame 5 -> 0 from lava-death-l)
         this.anims.create({
-            key: 'lava-death-l-anim',
-            frames: this.anims.generateFrameNumbers('lava-death-l', { start: 0, end: 5 }),
+            key: 'lava-death-r-anim',
+            frames: this.anims.generateFrameNumbers('lava-death-r', { start: 0, end: 5 }),
             frameRate: 14,
             repeat: 0
         });
 
         this.anims.create({
-            key: 'lava-death-r-anim',
+            key: 'lava-death-l-anim',
             frames: [
-                { key: 'lava-death-r', frame: 5 },
-                { key: 'lava-death-r', frame: 4 },
-                { key: 'lava-death-r', frame: 3 },
-                { key: 'lava-death-r', frame: 2 },
-                { key: 'lava-death-r', frame: 1 },
-                { key: 'lava-death-r', frame: 0 }
+                { key: 'lava-death-l', frame: 5 },
+                { key: 'lava-death-l', frame: 4 },
+                { key: 'lava-death-l', frame: 3 },
+                { key: 'lava-death-l', frame: 2 },
+                { key: 'lava-death-l', frame: 1 },
+                { key: 'lava-death-l', frame: 0 }
             ],
             frameRate: 14,
             repeat: 0
@@ -875,19 +826,21 @@ export class MainStageScene extends Phaser.Scene {
         this.anims.create({ key: 'enemy-fireball-l', frames: this.anims.generateFrameNumbers('enemy-fireball', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'enemy-fireball-r', frames: this.anims.generateFrameNumbers('enemy-fireball', { start: 4, end: 7 }), frameRate: 10, repeat: -1 });
 
-        // Bug (Green & Yellow) - 42x30 (4 frames)
-        this.anims.create({ key: 'mob-bug-green-walk-l', frames: this.anims.generateFrameNumbers('mob-bug-green-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'mob-bug-green-walk-r', frames: this.anims.generateFrameNumbers('mob-bug-green-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'mob-bug-yellow-walk-l', frames: this.anims.generateFrameNumbers('mob-bug-yellow-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'mob-bug-yellow-walk-r', frames: this.anims.generateFrameNumbers('mob-bug-yellow-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        // Lantern Spirit: 3 frames (0..2)
+        this.anims.create({ key: 'mob-lantern-spirit-walk-l', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-l', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-lantern-spirit-walk-r', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-r', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-lantern-walk-l', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-l', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-lantern-walk-r', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-r', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-spirit-walk-l', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-l', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'mob-spirit-walk-r', frames: this.anims.generateFrameNumbers('mob-lantern-spirit-r', { start: 0, end: 2 }), frameRate: 6, repeat: -1 });
 
-        // Devil - 42x30 (4 frames)
-        this.anims.create({ key: 'mob-devil-walk-l', frames: this.anims.generateFrameNumbers('mob-devil-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-        this.anims.create({ key: 'mob-devil-walk-r', frames: this.anims.generateFrameNumbers('mob-devil-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-
-        // Hedgehog - 42x30 (4 frames)
-        this.anims.create({ key: 'mob-hedgehog-walk-l', frames: this.anims.generateFrameNumbers('mob-hedgehog-l', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
-        this.anims.create({ key: 'mob-hedgehog-walk-r', frames: this.anims.generateFrameNumbers('mob-hedgehog-r', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        // Shapeshifter Fox: 4 frames (0..3)
+        this.anims.create({ key: 'mob-shapeshifter-fox-walk-l', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-shapeshifter-fox-walk-r', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-shapeshifter-walk-l', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-shapeshifter-walk-r', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-fox-walk-l', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-l', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'mob-fox-walk-r', frames: this.anims.generateFrameNumbers('mob-shapeshifter-fox-r', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
 
         // Bonsai Gripper, Pumpkin Bat, Sandal Mob
         this.anims.create({ key: 'mob-bonsai-gripper-walk-l', frames: this.anims.generateFrameNumbers('mob-bonsai-gripper', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
@@ -926,6 +879,11 @@ export class MainStageScene extends Phaser.Scene {
             return;
         }
 
+        // Only accumulate active run time when player is alive (strictly paused during all deaths)
+        if (this.player && !this.player.isDying) {
+            this.activeRunTimeMs += delta;
+        }
+
         const formattedTime = this.getFormattedElapsedTime();
 
         this.uiManager.updateHUD(
@@ -942,7 +900,7 @@ export class MainStageScene extends Phaser.Scene {
         if (this.eleckingBoss) this.eleckingBoss.update(_time, delta);
         SecurityManager.getInstance().logPlayerPosition(this.player.x, this.player.y);
 
-        const currentFrame = Math.floor((this.time.now - this.startTime) / 16.6667);
+        const currentFrame = Math.floor(this.activeRunTimeMs / 16.6667);
         InputRecorder.getInstance().logFrame(currentFrame, this.player.getActiveKeys());
     }
 

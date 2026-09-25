@@ -819,7 +819,7 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"devil"
+                         "value":"LanternSpirit"
                         }],
                  "rotation":0,
                  "type":"",
@@ -931,7 +931,7 @@
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"devil"
+                         "value":"LanternSpirit"
                         }],
                  "rotation":0,
                  "type":"",
@@ -1062,6 +1062,11 @@
                          "name":"type",
                          "type":"string",
                          "value":"GhostMob"
+                        }, 
+                        {
+                         "name":"verticalMode",
+                         "type":"string",
+                         "value":"up"
                         }, 
                         {
                          "name":"verticalRange",
@@ -2243,8 +2248,8 @@
                  "type":"",
                  "visible":true,
                  "width":0,
-                 "x":4694.72727272727,
-                 "y":276.909090909091
+                 "x":2604,
+                 "y":202.787878787879
                 }, 
                 {
                  "height":31.93,
@@ -2397,49 +2402,6 @@
                  "width":31.9456,
                  "x":3712.0272,
                  "y":191.951666666667
-                }, 
-                {
-                 "height":31.4885999999999,
-                 "id":309,
-                 "name":"ShooterMob",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"bulletSpeed",
-                         "type":"int",
-                         "value":300
-                        }, 
-                        {
-                         "name":"direction",
-                         "type":"string",
-                         "value":"right"
-                        }, 
-                        {
-                         "name":"range",
-                         "type":"int",
-                         "value":140
-                        }, 
-                        {
-                         "name":"shootInterval",
-                         "type":"int",
-                         "value":2000
-                        }, 
-                        {
-                         "name":"size",
-                         "type":"float",
-                         "value":1.4
-                        }, 
-                        {
-                         "name":"speed",
-                         "type":"int",
-                         "value":100
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":30.8636000000001,
-                 "x":2240.6932,
-                 "y":1051.9432
                 }, 
                 {
                  "height":31.93,
@@ -2663,8 +2625,8 @@
                  "type":"",
                  "visible":true,
                  "width":1252.33333333333,
-                 "x":3517.33333333333,
-                 "y":893.333333333333
+                 "x":3518.33333333333,
+                 "y":906.833333333333
                 }, 
                 {
                  "gid":3479,
@@ -2982,8 +2944,8 @@
                  "type":"",
                  "visible":true,
                  "width":64,
-                 "x":4400,
-                 "y":1161.33333333333
+                 "x":4395,
+                 "y":1177.83333333333
                 }, 
                 {
                  "gid":3605,
@@ -3166,8 +3128,7 @@
                  "width":16,
                  "x":3545.33333333333,
                  "y":1047.33333333333
-                },
-            
+                }, 
                 {
                  "gid":1694,
                  "height":16,
@@ -3180,7 +3141,8 @@
                  "width":16,
                  "x":3575.33333333333,
                  "y":1179.33333333333
-                }, 
+                },
+            
                 {
                  "height":33.2727272727273,
                  "id":363,
@@ -3229,6 +3191,29 @@
                  "width":0,
                  "x":4715,
                  "y":1226
+                }, 
+                {
+                 "height":31.8636,
+                 "id":369,
+                 "name":"GroundMob",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"speed",
+                         "type":"int",
+                         "value":100
+                        }, 
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"ShapeshifterFox"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":31.3636,
+                 "x":2254.3182,
+                 "y":1055.0682
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -3327,7 +3312,7 @@
          "y":0
         }],
  "nextlayerid":13,
- "nextobjectid":369,
+ "nextobjectid":370,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",

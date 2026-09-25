@@ -241,14 +241,12 @@ export class EnemyManager {
     private normalizeMobType(rawType: string): string {
         const s = rawType.toLowerCase().trim().replace(/[\s_-]+/g, '-');
         if (s.includes('sandal')) return 'sandal';
+        if (s.includes('lantern') || s.includes('spirit')) return 'lantern-spirit';
+        if (s.includes('shapeshift') || s.includes('fox')) return 'shapeshifter-fox';
         if (s.includes('bat') || s.includes('pumpkin')) return 'pumpkin-bat';
         if (s.includes('bonsai') || s.includes('gripper')) return 'bonsai-gripper';
         if (s.includes('kappa') || s.includes('lava')) return 'lava-kappa';
         if (s.includes('shiro') || s.includes('onna') || s.includes('ghost') || s.includes('teleport')) return 'shiro-onna';
-        if (s.includes('yellow')) return 'bug-yellow';
-        if (s.includes('devil') || s.includes('red')) return 'devil';
-        if (s.includes('hedgehog') || s.includes('purple')) return 'hedgehog';
-        if (s.includes('green') || s.includes('bug')) return 'bug-green';
         return s;
     }
 
@@ -264,6 +262,12 @@ export class EnemyManager {
         }
         if (mobType === 'bonsai-gripper' || mobType === 'gripper') {
             return { key: 'mob-bonsai-gripper', frame: 0 };
+        }
+        if (mobType === 'lantern-spirit' || mobType === 'lantern' || mobType === 'spirit') {
+            return { key: dir === 1 ? 'mob-lantern-spirit-r' : 'mob-lantern-spirit-l', frame: 0 };
+        }
+        if (mobType === 'shapeshifter-fox' || mobType === 'shapeshifter' || mobType === 'fox') {
+            return { key: dir === 1 ? 'mob-shapeshifter-fox-r' : 'mob-shapeshifter-fox-l', frame: 0 };
         }
         if (mobType === 'sandal' || mobType === 'sandal-mob') {
             return { key: dir === 1 ? 'mob-sandal-r' : 'mob-sandal-l', frame: 0 };
@@ -314,27 +318,31 @@ export class EnemyManager {
                 nameLower.includes('ghost') ||
                 nameLower.includes('teleport') ||
                 nameLower.includes('sandal') ||
+                nameLower.includes('lantern') ||
+                nameLower.includes('spirit') ||
+                nameLower.includes('shapeshift') ||
+                nameLower.includes('fox') ||
                 nameLower.includes('kappa') ||
-                nameLower.includes('bug') ||
-                nameLower.includes('devil') ||
-                nameLower.includes('hedgehog') ||
                 nameLower.includes('gripper') ||
                 nameLower.includes('bonsai') ||
                 typeLower.includes('ghost') ||
                 typeLower.includes('shiro') ||
                 typeLower.includes('sandal') ||
+                typeLower.includes('lantern') ||
+                typeLower.includes('spirit') ||
+                typeLower.includes('shapeshift') ||
+                typeLower.includes('fox') ||
                 typeLower.includes('kappa') ||
-                typeLower.includes('devil') ||
-                typeLower.includes('hedgehog') ||
                 typeLower.includes('gripper') ||
                 typeLower.includes('shooter') ||
                 customType.includes('ghost') ||
                 customType.includes('shiro') ||
                 customType.includes('sandal') ||
+                customType.includes('lantern') ||
+                customType.includes('spirit') ||
+                customType.includes('shapeshift') ||
+                customType.includes('fox') ||
                 customType.includes('kappa') ||
-                customType.includes('bug') ||
-                customType.includes('devil') ||
-                customType.includes('hedgehog') ||
                 customType.includes('gripper') ||
                 customType.includes('shooter')
             );
@@ -354,7 +362,7 @@ export class EnemyManager {
                 return;
             }
 
-            let mobType = 'bug-green';
+            let mobType = 'sandal';
             const customType = this.getProp(obj, ['type', 'mobtype', 'mob_type', 'monster', 'mob']);
             if (customType && String(customType).trim() !== '') {
                 mobType = String(customType).trim();
@@ -365,6 +373,8 @@ export class EnemyManager {
                 if (n === 'ShooterMob' || n === 'ShootingMob') mobType = 'lava-kappa';
                 else if (n === 'ShiroOnna' || n === 'GhostMob' || n === 'TeleportMob') mobType = 'shiro-onna';
                 else if (n.toLowerCase().includes('sandal')) mobType = 'sandal';
+                else if (n.toLowerCase().includes('lantern') || n.toLowerCase().includes('spirit')) mobType = 'lantern-spirit';
+                else if (n.toLowerCase().includes('shapeshift') || n.toLowerCase().includes('fox')) mobType = 'shapeshifter-fox';
                 else if (n !== 'GroundMob' && n !== 'Mob' && n !== 'Enemy') mobType = n;
             }
 
@@ -490,8 +500,8 @@ export class EnemyManager {
                 if (rangeRight === undefined) rangeRight = horizontalRange;
             }
             if (verticalRange !== undefined) {
-                if (rangeUp === undefined) rangeUp = verticalRange;
-                if (rangeDown === undefined) rangeDown = verticalRange;
+                if (rangeUp === undefined) rangeUp = (verticalMode === 'down' ? 0 : verticalRange);
+                if (rangeDown === undefined) rangeDown = (verticalMode === 'up' ? 0 : verticalRange);
             }
 
             const owProp = this.getProp(obj, ['allowoneway', 'oneway']);
@@ -533,14 +543,13 @@ export class EnemyManager {
                 mob.setScale(mobScale);
             }
             
-            const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper' || normalizedType === 'lava-kappa' || normalizedType === 'shiro-onna';
             const body = mob.body as Phaser.Physics.Arcade.Body;
-            const texW = is32x32 ? 32 : 42;
-            const texH = is32x32 ? 32 : 30;
-            const baseW = is32x32 ? 22 : 24;
-            const baseH = is32x32 ? 22 : 24;
+            const texW = 32;
+            const texH = 32;
+            const baseW = 22;
+            const baseH = normalizedType === 'sandal' ? 22 : 24;
             const baseOffX = (texW - baseW) / 2;
-            const baseOffY = texH - baseH;
+            const baseOffY = normalizedType === 'sandal' ? 9 : (texH - baseH);
             body.setSize(baseW, baseH);
             body.setOffset(baseOffX, baseOffY);
             body.setCollideWorldBounds(true);
@@ -740,11 +749,10 @@ export class EnemyManager {
             const body = mob.body as Phaser.Physics.Arcade.Body;
             body.allowGravity = false;
 
-            const is32x32 = normalizedType === 'sandal' || normalizedType === 'pumpkin-bat' || normalizedType === 'bonsai-gripper' || normalizedType === 'lava-kappa' || normalizedType === 'shiro-onna';
-            const baseW = is32x32 ? 22 : 24;
-            const baseH = is32x32 ? 22 : 24;
-            const baseOffX = is32x32 ? 5 : 9;
-            const baseOffY = normalizedType === 'sandal' ? 9 : (is32x32 ? 10 : 6);
+            const baseW = 22;
+            const baseH = 22;
+            const baseOffX = 5;
+            const baseOffY = normalizedType === 'sandal' ? 9 : 10;
             body.setSize(baseW, baseH);
             body.setOffset(baseOffX, baseOffY);
 
@@ -854,7 +862,7 @@ export class EnemyManager {
     private spawnPipeMonsters() {
         this.pipeMonsters.clear(true, true);
 
-        const monsterObjects = this.map.createFromObjects('Objects', { name: 'PipeMonster', key: 'pipe-monster-l' });
+        const monsterObjects = this.map.createFromObjects('Objects', { name: 'PipeMonster', key: 'mob-bonsai-gripper' });
         const rawObjects = this.rawMapObjects.filter((o: any) => o.name === 'PipeMonster');
 
         monsterObjects.forEach((obj: any, index: number) => {
@@ -874,21 +882,10 @@ export class EnemyManager {
             monsterBody.setOffset(4, 3);
             
             obj.setDepth(2.9);
-            obj.setTexture('pipe-monster-l');
-
-            // Look left and right at a fixed interval using dedicated Devil_Red_Stand_L/R images
-            const lookTimer = this.scene.time.addEvent({
-                delay: 750,
-                loop: true,
-                callback: () => {
-                    if (obj && obj.active) {
-                        const nextTex = obj.texture.key === 'pipe-monster-l' ? 'pipe-monster-r' : 'pipe-monster-l';
-                        obj.setTexture(nextTex);
-                    } else if (lookTimer) {
-                        lookTimer.destroy();
-                    }
-                }
-            });
+            obj.setTexture('mob-bonsai-gripper', 0);
+            if (this.scene.anims.exists('mob-bonsai-gripper-walk-l')) {
+                obj.play('mob-bonsai-gripper-walk-l');
+            }
 
             let popDuration = 200;
             const rawObj = rawObjects[index];
@@ -1246,13 +1243,28 @@ export class EnemyManager {
             teleportRange = Math.max(teleportRange, maxHRange + 64);
         }
 
-        // Horizontal axis detection checks (-x and +x)
-        if (this.player.x < spawnX && rangeLeft !== undefined && (spawnX - this.player.x) > rangeLeft + 48) return;
-        if (this.player.x > spawnX && rangeRight !== undefined && (this.player.x - spawnX) > rangeRight + 48) return;
+        const verticalTeleport = mob.getData('verticalTeleport') !== false;
+        const verticalRange = (mob.getData('verticalRange') as number) || 96;
+        const verticalMode = (mob.getData('verticalMode') as string) || 'any';
+        const allowOneWay = mob.getData('allowOneWay') !== false;
 
-        // Vertical axis detection checks (-y and +y)
-        if (this.player.y < spawnY && rangeUp !== undefined && (spawnY - this.player.y) > rangeUp + 48) return;
-        if (this.player.y > spawnY && rangeDown !== undefined && (this.player.y - spawnY) > rangeDown + 48) return;
+        // Horizontal axis detection checks (-x and +x)
+        if (this.player.x < spawnX && rangeLeft !== undefined && (spawnX - this.player.x) > rangeLeft + 64) return;
+        if (this.player.x > spawnX && rangeRight !== undefined && (this.player.x - spawnX) > rangeRight + 64) return;
+
+        // Vertical axis detection checks
+        if (verticalMode === 'up') {
+            if (this.player.y < spawnY && rangeUp !== undefined && (spawnY - this.player.y) > rangeUp + 64) return;
+            if (this.player.y > spawnY && (this.player.y - spawnY) > 96) return;
+        } else if (verticalMode === 'down') {
+            if (this.player.y > spawnY && rangeDown !== undefined && (this.player.y - spawnY) > rangeDown + 64) return;
+            if (this.player.y < spawnY && (spawnY - this.player.y) > 96) return;
+        } else if (verticalMode === 'same' || !verticalTeleport) {
+            if (Math.abs(this.player.y - spawnY) > 64) return;
+        } else {
+            if (this.player.y < spawnY && rangeUp !== undefined && (spawnY - this.player.y) > rangeUp + 64) return;
+            if (this.player.y > spawnY && rangeDown !== undefined && (this.player.y - spawnY) > rangeDown + 64) return;
+        }
 
         const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
         if (distToPlayer > teleportRange) return;
@@ -1280,38 +1292,15 @@ export class EnemyManager {
         const isPlayerInAir = !pBody.blocked.down && !this.player.isOnPlatform;
         const projectedLandingX = this.player.x + (pBody.velocity.x * 0.35);
 
-        // Custom Teleportation Constraints
-        const verticalTeleport = mob.getData('verticalTeleport') !== false;
-        const verticalRange = (mob.getData('verticalRange') as number) || 96;
-        const verticalMode = (mob.getData('verticalMode') as string) || 'any';
-        const allowOneWay = mob.getData('allowOneWay') !== false;
-
-        let maxUpPx = rangeUp ?? (verticalTeleport ? verticalRange : 0);
-        let maxDownPx = rangeDown ?? (verticalTeleport ? verticalRange : 0);
-
-        if (verticalMode === 'up') maxDownPx = 0;
-        else if (verticalMode === 'down') maxUpPx = 0;
-        else if (verticalMode === 'same' || !verticalTeleport) {
-            maxUpPx = 16;
-            maxDownPx = 16;
-        }
-
-        // Generate vertical tile offsets starting from player's current floor level (0), then expanding outwards
-        const maxUpTiles = Math.floor(maxUpPx / 32);
-        const maxDownTiles = Math.floor(maxDownPx / 32);
-        const maxTileDist = Math.max(maxUpTiles, maxDownTiles);
+        // Search vertical tile offsets both up and down around player's current elevation
+        const maxVSpread = Math.max(verticalRange, rangeUp || 0, 96);
+        const maxTileDist = Math.min(Math.floor(maxVSpread / 32), 16);
         const verticalTileOffsets: number[] = [0];
 
         for (let t = 1; t <= maxTileDist; t++) {
-            if (verticalMode === 'up') {
-                if (t <= maxUpTiles) verticalTileOffsets.push(-t * 32);
-            } else if (verticalMode === 'down') {
-                if (t <= maxDownTiles) verticalTileOffsets.push(t * 32);
-            } else {
-                // Prioritize same level / immediate ground first
-                if (t <= maxDownTiles) verticalTileOffsets.push(t * 32);
-                if (t <= maxUpTiles) verticalTileOffsets.push(-t * 32);
-            }
+            verticalTileOffsets.push(0); // same level
+            verticalTileOffsets.push(-t * 32); // above player
+            verticalTileOffsets.push(t * 32);  // below player
         }
 
         // Base tile Y corresponding to player's feet
@@ -1336,15 +1325,21 @@ export class EnemyManager {
 
                 const floorY = Math.floor(testY / 32) * 32; // Top surface of floor tile in world px
 
-                // 2. Vertical Distance Checks relative to Spawn (-y and +y), Player, and Mob
-                if (floorY < spawnY && rangeUp !== undefined && (spawnY - floorY) > rangeUp + 24) continue;
-                if (floorY > spawnY && rangeDown !== undefined && (floorY - spawnY) > rangeDown + 24) continue;
-
-                const pDiff = floorY - this.player.y;
-                if (pDiff < -maxUpPx - 24 || pDiff > maxDownPx + 36) continue;
-
-                const mDiff = floorY - mob.y;
-                if (mDiff < -maxUpPx - 24 || mDiff > maxDownPx + 36) continue;
+                // 2. Strict vertical bounds relative to spawn position
+                if (verticalMode === 'up') {
+                    // Cannot teleport below spawn floor! (allowed from spawn level upwards)
+                    if (floorY > spawnY + 16) continue;
+                    if (rangeUp !== undefined && (spawnY - floorY) > rangeUp + 24) continue;
+                } else if (verticalMode === 'down') {
+                    // Cannot teleport above spawn floor!
+                    if (floorY < spawnY - 16) continue;
+                    if (rangeDown !== undefined && (floorY - spawnY) > rangeDown + 24) continue;
+                } else if (verticalMode === 'same' || !verticalTeleport) {
+                    if (Math.abs(floorY - spawnY) > 24) continue;
+                } else {
+                    if (rangeUp !== undefined && (spawnY - floorY) > rangeUp + 24) continue;
+                    if (rangeDown !== undefined && (floorY - spawnY) > rangeDown + 24) continue;
+                }
 
                 // 3. Anti-Clipping Bounding Box Clearance: ensure the ghost standing box is empty air
                 const mobScale = (mob.getData('scale') as number) || 1.0;

@@ -246,36 +246,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
                 // Jumping / Rising (Frame 1: Left Jump, Frame 2: Right Jump)
                 if (this.anims.isPlaying) this.anims.stop();
                 const frame = this.facing === 'right' ? 2 : 1;
-                if (this.texture.key !== 'player-jump-fall' || this.frame.name !== String(frame)) {
-                    this.setTexture('player-jump-fall', frame);
+                if (this.texture.key !== 'player-jump' || this.frame.name !== String(frame)) {
+                    this.setTexture('player-jump', frame);
                 }
             } else {
                 // Falling / Descending
-                if (this.hasGun) {
-                    const fallGunAnimKey = this.facing === 'right' ? 'fall-gun-r-anim' : 'fall-gun-l-anim';
-                    if (this.scene.anims.exists(fallGunAnimKey)) {
-                        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallGunAnimKey) {
-                            this.anims.play(fallGunAnimKey, true);
-                        }
-                    } else {
-                        if (this.anims.isPlaying) this.anims.stop();
-                        const key = this.facing === 'right' ? 'player-fall-gun-r' : 'player-fall-gun-l';
-                        if (this.texture.key !== key) {
-                            this.setTexture(key, 0);
-                        }
+                const fallAnimKey = this.facing === 'right' ? 'fall-r-anim' : 'fall-l-anim';
+                if (this.scene.anims.exists(fallAnimKey)) {
+                    if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallAnimKey) {
+                        this.anims.play(fallAnimKey, true);
                     }
                 } else {
-                    const fallAnimKey = this.facing === 'right' ? 'fall-r-anim' : 'fall-l-anim';
-                    if (this.scene.anims.exists(fallAnimKey)) {
-                        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== fallAnimKey) {
-                            this.anims.play(fallAnimKey, true);
-                        }
-                    } else {
-                        if (this.anims.isPlaying) this.anims.stop();
-                        const frame = this.facing === 'right' ? 3 : 0;
-                        if (this.texture.key !== 'player-fall' || this.frame.name !== String(frame)) {
-                            this.setTexture('player-fall', frame);
-                        }
+                    if (this.anims.isPlaying) this.anims.stop();
+                    const frame = this.facing === 'right' ? 3 : 0;
+                    if (this.texture.key !== 'player-fall' || this.frame.name !== String(frame)) {
+                        this.setTexture('player-fall', frame);
                     }
                 }
             }
@@ -394,7 +379,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
             if (this.scene.textures.exists(spriteKey)) {
                 // Spawn inside the lava block
-                const deathSprite = this.scene.add.sprite(deathX, deathY + 6, spriteKey, isRight ? 5 : 0);
+                const deathSprite = this.scene.add.sprite(deathX, deathY + 6, spriteKey, isRight ? 0 : 5);
                 deathSprite.setDepth(10);
                 deathSprite.setOrigin(0.5, 0.5);
                 this.activeDeathSprite = deathSprite;
