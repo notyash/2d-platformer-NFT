@@ -1580,7 +1580,41 @@ export class EnemyManager {
                         mob.setData('lastTurnTime', currentTime);
                     }
 
-                    if (body.blocked.left && body.blocked.right) {
+                    // Check if approaching a jump pad ahead (mobs turn back when approaching jump pad)
+                    let isNearJumpPad = false;
+                    if (this.envManager && this.envManager.jumpPads && this.envManager.jumpPads.length > 0) {
+                        for (const pad of this.envManager.jumpPads) {
+                            if (!pad.active) continue;
+                            const padLeft = pad.x;
+                            const padRight = pad.x + (pad.displayWidth || 32);
+                            const padTop = pad.y - (pad.displayHeight || 32);
+                            const padBottom = pad.y;
+
+                            // Check vertical alignment (on the same floor row)
+                            const isAtSameFloorLevel = (body.bottom >= padTop - 12 && body.top <= padBottom + 12);
+                            if (isAtSameFloorLevel) {
+                                const padLookahead = Math.max(10, Math.ceil(speed * 0.12));
+                                if (dir === 1 && (body.right + padLookahead >= padLeft && body.left < padLeft)) {
+                                    isNearJumpPad = true;
+                                    break;
+                                } else if (dir === -1 && (body.left - padLookahead <= padRight && body.right > padRight)) {
+                                    isNearJumpPad = true;
+                                    break;
+                                } else if (body.right > padLeft && body.left < padRight) {
+                                    isNearJumpPad = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (isNearJumpPad) {
+                        if (canTurn) {
+                            dir *= -1;
+                            mob.setData('direction', dir);
+                            mob.setData('lastTurnTime', currentTime);
+                        }
+                    } else if (body.blocked.left && body.blocked.right) {
                         // Wedged in narrow space: stop moving to prevent infinite vibrating
                         mob.setVelocityX(0);
                     } else if (body.blocked.left || body.touching.left) {

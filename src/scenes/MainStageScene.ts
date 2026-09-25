@@ -56,8 +56,8 @@ export class MainStageScene extends Phaser.Scene {
         this.load.tilemapTiledJSON('stage1', 'assets/tilemaps/harder-main-stage.json');
 
         // Tileset overlays
-        this.load.image('plain-ground', 'assets/sprites/background/plainGround.png');
-        this.load.image('plainGround', 'assets/sprites/background/plainGround.png');
+        this.load.image('plain-ground', 'assets/sprites/blocks/plainGround.png');
+        this.load.image('plainGround', 'assets/sprites/blocks/plainGround.png');
         this.load.image('plain-dungeon', 'assets/sprites/background/plainDungeon.png');
         this.load.image('plainDungeon', 'assets/sprites/background/plainDungeon.png');
 
@@ -76,7 +76,7 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('spike', 'assets/sprites/misc/spike.png');
         this.load.image('misc/spike', 'assets/sprites/misc/spike.png');
         this.load.image('blocks/spike', 'assets/sprites/blocks/spike.png');
-        this.load.image('jump-pad-img', 'assets/sprites/misc/jumppad sprite.png');
+        this.load.spritesheet('jump-pad-img', 'assets/sprites/misc/jumppad sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('coin', 'assets/sprites/collectibles/new coin sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
         this.load.spritesheet('firebar-sprite', 'assets/sprites/misc/firebar sprite.png', { frameWidth: 32, frameHeight: 64 });
@@ -127,66 +127,64 @@ export class MainStageScene extends Phaser.Scene {
         // Boss Sprites
         this.load.spritesheet('elecking-power', 'assets/sprites/boss/Elecking Power Attack Sprite.png', { frameWidth: 64, frameHeight: 64 });
         this.load.spritesheet('temp-platforms', 'assets/sprites/boss/temp platforms.png', { frameWidth: 64, frameHeight: 32 });
-        this.load.image('cloud-attack-1', 'assets/sprites/boss/cloud attack1.png');
-        this.load.image('cloud-attack-2', 'assets/sprites/boss/cloud attack2.png');
-        this.load.image('cloud-attack-3', 'assets/sprites/boss/cloud attack3.png');
-        this.load.image('cloud-attack-4', 'assets/sprites/boss/cloud attack4.png');
-        this.load.image('cloud-attack-5', 'assets/sprites/boss/cloud attack5.png');
+        this.load.spritesheet('cloud-thunder-attack', 'assets/sprites/boss/cloud thunder attack.png', { frameWidth: 32, frameHeight: 240 });
+        this.load.spritesheet('attack-orb', 'assets/sprites/boss/attack orb.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('victory-orb', 'assets/sprites/boss/victory orb.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('gravity-orb', 'assets/sprites/boss/gravity orb.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('attack-tiles', 'assets/sprites/boss/attack tiles.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('attack tiles', 'assets/sprites/boss/attack tiles.png', { frameWidth: 32, frameHeight: 32 });
 
-        // Auto-discover and preload all images and sprites in public/assets/ (including sprites, blocks, misc, backgrounds, etc.)
-        const explicitPreloadKeys = new Set<string>([
-            'spike', 'misc/spike', 'blocks/spike', 'landtiles', 'levelobjects', 'sky', 'clouds1', 'cloud2',
-            'smallTree', 'largeTree', 'grass', 'cherry blossom', 'dandelion', 'well', 'water', 'lava', 'bush',
-            'mountain', '32 files dungeon', '64 files dungeon', 'cloud variation', 'plain-ground', 'plainGround',
-            'plain-dungeon', 'plainDungeon', 'moving-platform', 'wooden moving platform', 'jump-pad-img'
-        ]);
-
+        // Auto-discover and preload unique image files in public/assets/ (once per file, zero duplicate network requests)
         const autoAssetModules = import.meta.glob<{ default?: string } | string>(
             '../../public/assets/**/*.{png,jpg,jpeg,svg,webp}', 
             { eager: true, query: '?url', import: 'default' }
         );
 
+        const queuedUrls = new Set<string>();
         Object.entries(autoAssetModules).forEach(([path, urlValue]) => {
             const cleanRelPath = path.replace(/^.*\/public\//, '');
             const url = typeof urlValue === 'string' ? urlValue : (urlValue as any)?.default || cleanRelPath;
-            const fileName = cleanRelPath.split('/').pop() || '';
-            const baseName = fileName.replace(/\.[^/.]+$/, '');
-            
-            const spritesSubpathMatch = cleanRelPath.match(/assets\/sprites\/(.+)\.[^/.]+$/);
-            const spritesSubpath = spritesSubpathMatch ? spritesSubpathMatch[1] : '';
-
-            const keys = new Set<string>([
-                baseName,
-                fileName,
-                cleanRelPath,
-                cleanRelPath.replace(/\.[^/.]+$/, ''),
-                cleanRelPath.replace(/^assets\//, ''),
-                cleanRelPath.replace(/^assets\//, '').replace(/\.[^/.]+$/, '')
-            ]);
-
-            if (spritesSubpath) {
-                keys.add(spritesSubpath);
-                keys.add(`sprites/${spritesSubpath}`);
-                keys.add(`sprites/${fileName}`);
-            }
-
-            const extraKeys: string[] = [];
-            keys.forEach(k => {
-                extraKeys.push(k.replace(/[-_]/g, ' '));
-                extraKeys.push(k.replace(/\s+/g, '-'));
-                extraKeys.push(k.replace(/\s+/g, '_'));
-            });
-            extraKeys.forEach(k => keys.add(k));
-
-            keys.forEach(key => {
-                if (key && !explicitPreloadKeys.has(key) && !this.textures.exists(key)) {
-                    this.load.image(key, url || cleanRelPath);
+            if (!queuedUrls.has(url)) {
+                queuedUrls.add(url);
+                if (!this.textures.exists(cleanRelPath)) {
+                    this.load.image(cleanRelPath, url);
                 }
-            });
+            }
         });
     }
 
     create() {
+        // Fast in-memory alias mapping for auto-discovered textures (0 network overhead)
+        const autoAssetModules = import.meta.glob<{ default?: string } | string>(
+            '../../public/assets/**/*.{png,jpg,jpeg,svg,webp}', 
+            { eager: true, query: '?url', import: 'default' }
+        );
+        Object.entries(autoAssetModules).forEach(([path]) => {
+            const cleanRelPath = path.replace(/^.*\/public\//, '');
+            if (this.textures.exists(cleanRelPath)) {
+                const srcImage = this.textures.get(cleanRelPath).getSourceImage() as HTMLImageElement;
+                if (srcImage) {
+                    const fileName = cleanRelPath.split('/').pop() || '';
+                    const baseName = fileName.replace(/\.[^/.]+$/, '');
+                    const aliases = [
+                        baseName,
+                        fileName,
+                        cleanRelPath.replace(/\.[^/.]+$/, ''),
+                        cleanRelPath.replace(/^assets\//, ''),
+                        cleanRelPath.replace(/^assets\//, '').replace(/\.[^/.]+$/, ''),
+                        baseName.replace(/[-_]/g, ' '),
+                        baseName.replace(/\s+/g, '-'),
+                        baseName.replace(/\s+/g, '_')
+                    ];
+                    aliases.forEach(alias => {
+                        if (alias && !this.textures.exists(alias)) {
+                            this.textures.addImage(alias, srcImage);
+                        }
+                    });
+                }
+            }
+        });
+
         const map = this.make.tilemap({ key: 'stage1' });
         this.createLayers(map);
         this.createAnimations();
@@ -276,7 +274,14 @@ export class MainStageScene extends Phaser.Scene {
 
         // Ground mobs treat JumpPads and MovingPlatforms as solid obstacles to prevent getting stuck
         if (this.envManager.jumpPads.length > 0) {
-            this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.jumpPads);
+            this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.jumpPads, (mobObj, padObj) => {
+                const mob = mobObj as Phaser.Physics.Arcade.Sprite;
+                const pad = padObj as Phaser.Physics.Arcade.Sprite;
+                const newDir = mob.x < pad.x ? -1 : 1;
+                mob.setData('direction', newDir);
+                mob.setVelocityX(((mob.getData('speed') as number) || 50) * newDir);
+                mob.setData('lastTurnTime', this.time.now);
+            });
         }
         if (this.envManager.movingPlatforms.length > 0) {
             this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.movingPlatforms);
@@ -871,6 +876,20 @@ export class MainStageScene extends Phaser.Scene {
 
         // Dandelion gentle sway animation (4 frames)
         this.anims.create({ key: 'dandelion-sway', frames: this.anims.generateFrameNumbers('dandelion', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+
+        // Jump Pad spring bounce animation (4 frames: 0 -> 1 -> 2 -> 3)
+        this.anims.create({
+            key: 'jump-pad-spring',
+            frames: this.anims.generateFrameNumbers('jump-pad-img', { start: 0, end: 3 }),
+            frameRate: 16,
+            repeat: 0
+        });
+        this.anims.create({
+            key: 'jumppad-spring',
+            frames: this.anims.generateFrameNumbers('jump-pad-img', { start: 0, end: 3 }),
+            frameRate: 16,
+            repeat: 0
+        });
     }
 
     update(_time: number, delta: number) {

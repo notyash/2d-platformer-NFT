@@ -584,8 +584,14 @@ export class EnvironmentManager {
         });
 
         rawPads.forEach((rawObj: any) => {
+            const posX = Math.round(rawObj.x);
+            const posY = Math.round(rawObj.y);
+            const padWidth = Math.round(rawObj.width || 32);
+            const padHeight = Math.round(rawObj.height || 32);
+
             let textureKey = 'jump-pad-img';
             let frameIndex: number | string | undefined = undefined;
+            let isCustomTile = false;
 
             if (rawObj.gid && map && map.tilesets) {
                 const cleanGid = rawObj.gid & 0x1FFFFFFF;
@@ -612,6 +618,7 @@ export class EnvironmentManager {
                         'wooden moving platform': 'wooden moving platform',
                         'jump-pad': 'jump-pad-img',
                         'jump-pad-img': 'jump-pad-img',
+                        'jumppad sprite': 'jump-pad-img',
                         'dandelion': 'dandelion',
                         'dandelion flower sprite': 'dandelion',
                         'plain-ground': 'plain-ground',
@@ -619,6 +626,10 @@ export class EnvironmentManager {
                     };
 
                     const resolvedKey = tilesetKeyMap[tileset.name] || tileset.name;
+                    if (resolvedKey !== 'jump-pad-img') {
+                        isCustomTile = true;
+                    }
+
                     if (this.scene.textures.exists(resolvedKey)) {
                         textureKey = resolvedKey;
                         const tex = this.scene.textures.get(resolvedKey);
@@ -642,16 +653,14 @@ export class EnvironmentManager {
                 }
             }
 
-            const padSprite = (frameIndex !== undefined)
-                ? this.scene.physics.add.sprite(rawObj.x, rawObj.y, textureKey, frameIndex)
-                : this.scene.physics.add.sprite(rawObj.x, rawObj.y, textureKey);
+            const padSprite = (frameIndex !== undefined && String(frameIndex) !== '0')
+                ? this.scene.physics.add.sprite(posX, posY, textureKey, frameIndex)
+                : this.scene.physics.add.sprite(posX, posY, textureKey, 0);
 
             padSprite.setDepth(4).setOrigin(0, 1);
-            if (rawObj.width && rawObj.height) {
-                padSprite.setDisplaySize(rawObj.width, rawObj.height);
-            }
+            padSprite.setDisplaySize(padWidth, padHeight);
             
-            let bouncePower = 800; 
+            let bouncePower = 820; 
             if (rawObj.properties) {
                 if (Array.isArray(rawObj.properties)) {
                     const pProp = rawObj.properties.find((p: any) => p && p.name && p.name.toLowerCase() === 'power');
@@ -661,23 +670,83 @@ export class EnvironmentManager {
                 }
             }
             padSprite.setData('bouncePower', -Math.abs(bouncePower));
+            padSprite.setData('isCompressing', false);
+            padSprite.setData('isCustomTile', isCustomTile);
+
             const padBody = padSprite.body as Phaser.Physics.Arcade.Body;
-            padBody.setAllowGravity(false).setImmovable(true).setSize(rawObj.width || padSprite.width, rawObj.height || padSprite.height).setOffset(0, 0);
+            const hitboxHeight = isCustomTile ? Math.min(padHeight, 16) : 8; // Visible spring pixel height at the bottom of the 32x32 tile
+            const hitboxOffsetY = padHeight - hitboxHeight;
+            padBody.setAllowGravity(false)
+                   .setImmovable(true)
+                   .setSize(padWidth, hitboxHeight)
+                   .setOffset(0, hitboxOffsetY);
             this.jumpPads.push(padSprite);
         });
 
-        let lastBounceTime = 0;
         this.scene.physics.add.collider(this.player, this.jumpPads, (_p, padObj) => {
             const pBody = (_p as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.Body;
-            const padBody = (padObj as Phaser.GameObjects.Sprite).body as Phaser.Physics.Arcade.Body;
-            const currentTime = this.scene.time.now;
+            const padSprite = padObj as Phaser.Physics.Arcade.Sprite;
+            const padBody = padSprite.body as Phaser.Physics.Arcade.Body;
+            const isCustomTile = Boolean(padSprite.getData('isCustomTile'));
             
-            if ((pBody.touching.down || pBody.blocked.down || pBody.bottom <= padBody.top + 8) && (currentTime - lastBounceTime > 200)) {
-                this.player.setVelocityY((padObj as Phaser.GameObjects.Sprite).getData('bouncePower'));
-                this.player.isNormalJump = false; 
-                this.player.ignoreGroundJumpUntil = currentTime + 150;
-                lastBounceTime = currentTime;
-                this.soundManager?.playJump();
+            // Only trigger if player physically touches/lands on the spring pixel hitbox from above
+            const isTouchingTop = (pBody.touching.down || pBody.blocked.down || (pBody.bottom >= padBody.top - 2 && pBody.bottom <= padBody.top + 8 && pBody.velocity.y >= 0));
+            const isHorizontallyAligned = (pBody.right > padBody.left + 2 && pBody.left < padBody.right - 2);
+
+            if (isTouchingTop && isHorizontallyAligned && !padSprite.getData('isCompressing')) {
+                padSprite.setData('isCompressing', true);
+
+                if (isCustomTile) {
+                    // Custom tile: Keep original tile graphic intact, do not use the jumppad sprite spring effect
+                    this.player.setVelocityY(padSprite.getData('bouncePower'));
+                    this.player.isNormalJump = false; 
+                    this.player.ignoreGroundJumpUntil = this.scene.time.now + 200;
+                    this.soundManager?.playJump();
+
+                    // Gentle squash tween for tactile feedback
+                    this.scene.tweens.add({
+                        targets: padSprite,
+                        scaleY: 0.85,
+                        duration: 60,
+                        yoyo: true,
+                        ease: 'Quad.easeInOut',
+                        onComplete: () => {
+                            if (padSprite.active) padSprite.setData('isCompressing', false);
+                        }
+                    });
+                } else {
+                    // Standard jumppad sprite: 4-frame weight compression & launch animation
+                    // a. Step 1: Display frame 1 (compressed spring under player weight)
+                    padSprite.setFrame(1);
+                    pBody.setVelocityY(0);
+
+                    // b. Hold compressed frame briefly (~80ms) to feel the player's weight pressing down
+                    this.scene.time.delayedCall(80, () => {
+                        if (!padSprite.active) return;
+
+                        // c. Step 2: Display frame 2 (extension starting)
+                        padSprite.setFrame(2);
+
+                        this.scene.time.delayedCall(30, () => {
+                            if (!padSprite.active) return;
+
+                            // Step 3: Display frame 3 (full launch extension) and shoot player upwards
+                            padSprite.setFrame(3);
+                            this.player.setVelocityY(padSprite.getData('bouncePower'));
+                            this.player.isNormalJump = false; 
+                            this.player.ignoreGroundJumpUntil = this.scene.time.now + 200;
+                            this.soundManager?.playJump();
+
+                            // Step 4: Reset back to resting frame 0
+                            this.scene.time.delayedCall(80, () => {
+                                if (padSprite.active) {
+                                    padSprite.setFrame(0);
+                                    padSprite.setData('isCompressing', false);
+                                }
+                            });
+                        });
+                    });
+                }
             }
         });
     }

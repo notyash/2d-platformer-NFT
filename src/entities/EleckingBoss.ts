@@ -19,8 +19,10 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
 
     // Tiled Properties & Objects
     private arenaZone?: Phaser.Geom.Rectangle;
+    private arenaCover?: Phaser.GameObjects.TileSprite;
     private bossLimitZone?: Phaser.Geom.Rectangle;
     private bossRespawnPoint?: { x: number, y: number };
+    private victoryPortalPoint?: { x: number, y: number };
     private initialSpawn: { x: number, y: number };
     private gravityOrbs: Phaser.GameObjects.Sprite[] = [];
     private tempClouds: Phaser.Physics.Arcade.Sprite[] = [];
@@ -89,7 +91,7 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
             const pBody = playerSprite.body as Phaser.Physics.Arcade.Body;
             const cBody = cloudSprite.body as Phaser.Physics.Arcade.Body;
 
-            if (pBody.bottom <= cBody.top + 6 && pBody.velocity.y >= 0) {
+            if (pBody.bottom <= cBody.top + 8 && (pBody.velocity.y >= 0 || pBody.blocked.down || pBody.touching.down)) {
                 playerSprite.isOnPlatform = true;
                 this.triggerCloudFade(cloudSprite);
             }
@@ -123,18 +125,45 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
             });
         }
 
+        if (!this.scene.anims.exists('cloud-thunder-strike')) {
+            this.scene.anims.create({
+                key: 'cloud-thunder-strike',
+                frames: this.scene.anims.generateFrameNumbers('cloud-thunder-attack', { start: 0, end: 4 }),
+                frameRate: 10,
+                repeat: 0
+            });
+        }
         if (!this.scene.anims.exists('lightning-strike')) {
             this.scene.anims.create({
                 key: 'lightning-strike',
-                frames: [
-                    { key: 'cloud-attack-1' },
-                    { key: 'cloud-attack-2' },
-                    { key: 'cloud-attack-3' },
-                    { key: 'cloud-attack-4' },
-                    { key: 'cloud-attack-5' }
-                ],
-                frameRate: 12,
+                frames: this.scene.anims.generateFrameNumbers('cloud-thunder-attack', { start: 0, end: 4 }),
+                frameRate: 10,
                 repeat: 0
+            });
+        }
+
+        if (!this.scene.anims.exists('attack-orb-anim')) {
+            this.scene.anims.create({
+                key: 'attack-orb-anim',
+                frames: this.scene.anims.generateFrameNumbers('attack-orb', { start: 0, end: 3 }),
+                frameRate: 8,
+                repeat: -1
+            });
+        }
+        if (!this.scene.anims.exists('victory-orb-anim')) {
+            this.scene.anims.create({
+                key: 'victory-orb-anim',
+                frames: this.scene.anims.generateFrameNumbers('victory-orb', { start: 0, end: 3 }),
+                frameRate: 8,
+                repeat: -1
+            });
+        }
+        if (!this.scene.anims.exists('gravity-orb-anim')) {
+            this.scene.anims.create({
+                key: 'gravity-orb-anim',
+                frames: this.scene.anims.generateFrameNumbers('gravity-orb', { start: 0, end: 3 }),
+                frameRate: 8,
+                repeat: -1
             });
         }
     }
@@ -169,15 +198,41 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
 
     private parseMapObjects(rawMapObjects: any[], map: Phaser.Tilemaps.Tilemap) {
         // Find BossArenaZone
-        const zoneObj = rawMapObjects.find(o => o.name === 'BossArenaZone');
+        const zoneObj = rawMapObjects.find(o => {
+            const n = (o.name || '').toLowerCase();
+            return n === 'bossarenazone' || n === 'bossarena' || n === 'bossfightzone';
+        });
         if (zoneObj) {
-            this.arenaZone = new Phaser.Geom.Rectangle(zoneObj.x, zoneObj.y, zoneObj.width, zoneObj.height);
+            this.arenaZone = new Phaser.Geom.Rectangle(zoneObj.x, zoneObj.y, zoneObj.width || 800, zoneObj.height || 600);
         }
 
         // Find BossLimit
-        const limitObj = rawMapObjects.find(o => o.name === 'BossLimit') || zoneObj;
+        const limitObj = rawMapObjects.find(o => {
+            const n = (o.name || '').toLowerCase();
+            return n === 'bosslimit';
+        });
         if (limitObj) {
             this.bossLimitZone = new Phaser.Geom.Rectangle(limitObj.x, limitObj.y, limitObj.width, limitObj.height);
+        } else {
+            this.bossLimitZone = this.arenaZone;
+        }
+
+        if (!this.arenaZone) {
+            this.arenaZone = this.bossLimitZone || new Phaser.Geom.Rectangle(this.x - 500, this.y - 400, 1000, 800);
+        }
+
+        if (this.arenaZone) {
+            const texKey = this.scene.textures.exists('plainGround') ? 'plainGround' : (this.scene.textures.exists('plain-ground') ? 'plain-ground' : 'blocks/plainGround');
+            this.arenaCover = this.scene.add.tileSprite(
+                this.arenaZone.x,
+                this.arenaZone.y,
+                this.arenaZone.width,
+                this.arenaZone.height,
+                texKey
+            );
+            this.arenaCover.setOrigin(0, 0);
+            this.arenaCover.setDepth(20);
+            this.arenaCover.setVisible(true);
         }
 
         // Find BossFightRespawn
@@ -187,6 +242,18 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         });
         if (respawnObj && respawnObj.x !== undefined && respawnObj.y !== undefined) {
             this.bossRespawnPoint = { x: respawnObj.x, y: respawnObj.y };
+        }
+
+        // Find VictoryPortalSpawn
+        const portalObj = rawMapObjects.find(o => {
+            const nameLower = (o.name || '').toLowerCase();
+            return nameLower === 'victoryportalspawn' || nameLower === 'victoryportal';
+        });
+        if (portalObj && portalObj.x !== undefined && portalObj.y !== undefined) {
+            this.victoryPortalPoint = {
+                x: portalObj.x + (portalObj.width || 0) / 2,
+                y: portalObj.y + (portalObj.height || 0) / 2
+            };
         }
 
         // Find TemporaryClouds
@@ -207,12 +274,13 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
             if (cBody) {
                 cBody.setAllowGravity(false);
                 cBody.setImmovable(true);
-                cBody.checkCollision.down = false;
-                cBody.checkCollision.left = false;
-                cBody.checkCollision.right = false;
+                cBody.checkCollision.none = false;
+                cBody.checkCollision.down = true;
+                cBody.checkCollision.left = true;
+                cBody.checkCollision.right = true;
                 cBody.checkCollision.up = true;
-                cBody.setSize(64, 24);
-                cBody.setOffset(0, 4);
+                cBody.setSize(c.width || 64, c.height || 32);
+                cBody.setOffset(0, 0);
             }
 
             // Custom Properties for Fading & Movement
@@ -261,15 +329,22 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         // Find GravityOrbs
         const orbObjs = rawMapObjects.filter(o => o.name === 'GravityOrb');
         orbObjs.forEach(o => {
-            const orb = this.scene.physics.add.sprite(o.x, o.y, 'particle').setTint(0x8B5CF6).setScale(2);
-            (orb.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+            const orb = this.scene.physics.add.sprite(o.x, o.y, 'gravity-orb');
+            orb.play('gravity-orb-anim');
+            orb.setDepth(10);
+            const orbBody = orb.body as Phaser.Physics.Arcade.Body;
+            if (orbBody) {
+                orbBody.setAllowGravity(false);
+                orbBody.setSize(24, 24);
+                orbBody.setOffset(4, 4);
+            }
             this.gravityOrbs.push(orb);
 
             // Overlap to collect
             this.scene.physics.add.overlap(this.player, orb, () => {
                 orb.destroy();
                 this.collectedOrbs++;
-                this.uiManager.showFloatingText(orb.x, orb.y - 10, 'ORB COLLECTED', '#8B5CF6');
+                this.uiManager.showFloatingText(orb.x, orb.y - 10, `ORB ${this.collectedOrbs}/10`, '#38BDF8');
                 if (this.collectedOrbs >= 10 && this.phase === 1) {
                     this.transitionToPhase2();
                 }
@@ -291,11 +366,19 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
                 const cleanGid = o.gid & 0x1FFFFFFF;
                 const tileset = map.tilesets.find((t: any) => cleanGid >= t.firstgid && cleanGid < t.firstgid + t.total);
                 const localFrame = tileset ? cleanGid - tileset.firstgid : 0;
-                const texKey = tileset?.name || '32 files dungeon';
+                let texKey = 'attack-tiles';
+                if (tileset && tileset.name && this.scene.textures.exists(tileset.name)) {
+                    texKey = tileset.name;
+                } else if (this.scene.textures.exists('attack-tiles')) {
+                    texKey = 'attack-tiles';
+                } else if (this.scene.textures.exists('attack tiles')) {
+                    texKey = 'attack tiles';
+                }
 
                 // Render solid block sprite (origin bottom-left in Tiled)
                 const sprite = this.dotBlocks.create(o.x, o.y, texKey, localFrame) as Phaser.Physics.Arcade.Sprite;
                 sprite.setOrigin(0, 1);
+                sprite.setDisplaySize(o.width || 32, o.height || 32);
                 sprite.refreshBody();
                 sprite.setDepth(2);
 
@@ -332,12 +415,26 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
+    public isPlayerInArena(): boolean {
+        if (!this.arenaZone || !this.player || !this.player.active || this.player.isDying) return false;
+        return Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.arenaZone);
+    }
+
     private startPhase1() {
         this.phase = 1;
         this.isInvulnerable = true;
         this.bossState = 'idle';
         this.setFrame(0);
+        this.setVisible(true);
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.setEnable(true);
+            body.setVelocity(0, 0);
+        }
         this.setPosition(this.initialSpawn.x, this.initialSpawn.y);
+        if (this.hasStarted && this.isPlayerInArena()) {
+            this.queueNextThunderSequence();
+        }
     }
 
     private queueNextThunderSequence() {
@@ -346,35 +443,38 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
 
         this.bossState = 'idle';
         this.scene.time.delayedCall(3000, () => {
-            this.playThunderTelegraph();
+            if (this.isPlayerInArena() && !this.isDead) {
+                this.playThunderTelegraph();
+            }
         });
     }
 
     private playThunderTelegraph() {
-        if (this.isDead) return;
+        if (this.isDead || !this.isPlayerInArena()) return;
         this.bossState = 'memory-telegraph';
+        this.anims.stop();
         (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
         
-        // Generate random sequence from 1..5 (random length 3 to 5, all combinations possible)
-        const length = Phaser.Math.Between(3, 5);
-        const shuffled = Phaser.Utils.Array.Shuffle([1, 2, 3, 4, 5]);
-        this.currentSequence = shuffled.slice(0, length);
+        // Pick exactly 3 random distinct drums in a randomized sequence (e.g. [1, 3, 5], [3, 5, 1], [2, 1, 4])
+        const available = [1, 2, 3, 4, 5];
+        this.currentSequence = Phaser.Utils.Array.Shuffle(available).slice(0, 3);
 
-        // Step through each drum in the sequence displaying its specific frame for 1 second
+        // Step through each drum in the sequence displaying its specific frame sequentially for 1 second each
         let step = 0;
         const playNextDrum = () => {
-            if (this.isDead || this.bossState !== 'memory-telegraph') return;
+            if (this.isDead || !this.isPlayerInArena() || this.bossState !== 'memory-telegraph') return;
 
             if (step < this.currentSequence.length) {
                 const drumNumber = this.currentSequence[step];
                 // Frame 1 corresponds to Drum 1, Frame 5 to Drum 5
                 this.setFrame(drumNumber);
+                this.soundManager?.playEnemyShoot();
                 step++;
                 this.scene.time.delayedCall(1000, playNextDrum);
             } else {
                 // Return to idle frame 0 before vanishing
                 this.setFrame(0);
-                this.scene.time.delayedCall(300, () => {
+                this.scene.time.delayedCall(400, () => {
                     this.vanishAndStrike();
                 });
             }
@@ -384,22 +484,24 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     }
 
     private vanishAndStrike() {
-        if (this.isDead) return;
+        if (this.isDead || !this.isPlayerInArena()) return;
         this.bossState = 'vanished';
         this.setVisible(false);
         (this.body as Phaser.Physics.Arcade.Body).setEnable(false);
 
         // Disappear for 3-4 seconds, then strike
         this.scene.time.delayedCall(Phaser.Math.Between(3000, 4000), () => {
-            this.executeThunderStrikes();
+            if (this.isPlayerInArena() && !this.isDead) {
+                this.executeThunderStrikes();
+            }
         });
     }
 
     private executeThunderStrikes() {
-        if (this.isDead) return;
+        if (this.isDead || !this.isPlayerInArena()) return;
         this.bossState = 'striking';
 
-        // Strike the tiles in sequence
+        // Strike the tiles matching the boss's telegraphed pattern in sequence
         let delay = 0;
         this.currentSequence.forEach(dotNumber => {
             this.scene.time.delayedCall(delay, () => {
@@ -410,33 +512,49 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
                     const tileW = tile.width || 32;
                     const tileH = tile.height || 32;
 
-                    // Play cloud & lightning animation striking down on the tile
-                    const cloudEffect = this.scene.add.sprite(tileX + tileW / 2, tileY, 'cloud-attack-1');
+                    // Play cloud & lightning animation striking down onto the 32x32 ground tile from the sky
+                    const cloudEffect = this.scene.add.sprite(tileX + tileW / 2, tileY, 'cloud-thunder-attack', 0);
                     cloudEffect.setOrigin(0.5, 1);
                     cloudEffect.setDepth(12);
-                    cloudEffect.play('lightning-strike');
+                    cloudEffect.play('cloud-thunder-strike');
 
-                    // Physics body on the lightning sprite to detect contact anywhere in the air/beam
+                    // Physics body covering the entire 32x240 column from cloud top down to ground
                     this.scene.physics.add.existing(cloudEffect);
                     const cBody = cloudEffect.body as Phaser.Physics.Arcade.Body;
                     if (cBody) {
                         cBody.setAllowGravity(false);
-                        cBody.setSize(cloudEffect.width * 0.75, cloudEffect.height);
+                        cBody.setImmovable(true);
+                        cBody.setSize(24, 240);
+                        cBody.setOffset(4, 0);
                     }
 
+                    // Touching any pixels from cloud down through the lightning beam kills the player
                     const strikeCollider = this.scene.physics.add.overlap(this.player, cloudEffect, () => {
                         this.player.die('electric');
                     });
 
-                    // Also check ground tile bounds immediately
-                    const pBounds = this.player.getBounds();
-                    const tBounds = new Phaser.Geom.Rectangle(tileX, tileY - 4, tileW, tileH + 8);
-                    if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, tBounds)) {
-                        this.player.die('electric');
-                    }
+                    // Stepping on or touching the targeted 32x32 ground tile while struck kills the player
+                    const groundCheckTimer = this.scene.time.addEvent({
+                        delay: 40,
+                        repeat: 12,
+                        callback: () => {
+                            if (!this.player || this.player.isDying) return;
+                            const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+                            if (pBody) {
+                                const pRect = new Phaser.Geom.Rectangle(pBody.x, pBody.y, pBody.width, pBody.height);
+                                const tRect = new Phaser.Geom.Rectangle(tileX, tileY - 4, tileW, tileH + 8);
+                                if (Phaser.Geom.Intersects.RectangleToRectangle(pRect, tRect)) {
+                                    this.player.die('electric');
+                                }
+                            }
+                        }
+                    });
 
-                    this.scene.time.delayedCall(600, () => {
+                    this.soundManager?.playEnemyShoot();
+
+                    this.scene.time.delayedCall(550, () => {
                         if (strikeCollider) strikeCollider.destroy();
+                        if (groundCheckTimer) groundCheckTimer.destroy();
                         if (cloudEffect && cloudEffect.active) cloudEffect.destroy();
                     });
                 });
@@ -502,12 +620,15 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     }
 
     private fireOrbOfRage() {
-        const orb = this.orbsOfRageGroup.create(this.x, this.y, 'fireball') as Phaser.Physics.Arcade.Sprite;
-        orb.setScale(2);
+        const orb = this.orbsOfRageGroup.create(this.x, this.y, 'attack-orb') as Phaser.Physics.Arcade.Sprite;
+        orb.play('attack-orb-anim');
+        orb.setDepth(14);
         const angle = Phaser.Math.Angle.Between(this.x, this.y, this.player.x, this.player.y);
         const speed = 150; // Medium speed
         const orbBody = orb.body as Phaser.Physics.Arcade.Body;
         if (orbBody) {
+            orbBody.setSize(20, 20);
+            orbBody.setOffset(6, 6);
             this.scene.physics.velocityFromRotation(angle, speed, orbBody.velocity);
         }
     }
@@ -595,22 +716,36 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
 
         // Spawn Orb of Victory
         this.scene.time.delayedCall(2000, () => {
-            const orbOfVictory = this.scene.physics.add.sprite(this.x, this.y, 'particle').setTint(0xFFD700).setScale(4);
-            (orbOfVictory.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+            const orbOfVictory = this.scene.physics.add.sprite(this.x, this.y, 'victory-orb');
+            orbOfVictory.play('victory-orb-anim');
+            orbOfVictory.setDepth(15);
+            const body = orbOfVictory.body as Phaser.Physics.Arcade.Body;
+            if (body) {
+                body.setAllowGravity(false);
+                body.setSize(24, 24);
+                body.setOffset(4, 4);
+            }
             
             this.scene.physics.add.overlap(this.player, orbOfVictory, () => {
                 orbOfVictory.destroy();
+                this.uiManager.showFloatingText(orbOfVictory.x, orbOfVictory.y - 15, 'VICTORY!', '#FFD700');
                 this.spawnVictoryPortal();
             });
         });
     }
 
     private spawnVictoryPortal() {
-        // Find VictoryPortalSpawn from environment manager or raw map objects
-        // We will do a generic portal for now
-        const portal = this.scene.physics.add.sprite(this.x, this.y - 50, 'fireball').setTint(0xFFFFFF).setScale(3);
+        const portalX = this.victoryPortalPoint?.x ?? this.x;
+        const portalY = this.victoryPortalPoint?.y ?? (this.y - 50);
+
+        const portal = this.scene.physics.add.sprite(portalX, portalY, 'victory-orb');
+        portal.play('victory-orb-anim');
+        portal.setScale(2);
+        portal.setDepth(15);
         (portal.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
         
+        this.uiManager.showFloatingText(portalX, portalY - 30, 'PORTAL OPEN', '#38BDF8');
+
         this.scene.physics.add.overlap(this.player, portal, () => {
             // Stage Clear & SurrealDB Integration
             if (typeof (this.scene as any).onStageComplete === 'function') {
@@ -664,19 +799,32 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     public update(_time: number, _delta: number) {
         if (this.isDead) return;
 
-        // Activation & Respawn Point trigger
-        if (this.arenaZone) {
-            const pBounds = this.player.getBounds();
-            if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, this.arenaZone)) {
-                if (this.bossRespawnPoint) {
-                    this.player.activeSpawnX = this.bossRespawnPoint.x;
-                    this.player.activeSpawnY = this.bossRespawnPoint.y;
-                }
-                if (!this.hasStarted) {
-                    this.hasStarted = true;
-                    this.queueNextThunderSequence();
-                }
-            }
+        const inArena = this.isPlayerInArena();
+
+        if (this.arenaCover) {
+            this.arenaCover.setVisible(!inArena);
+        }
+
+        if (!inArena) {
+            // Freeze boss and moving platforms completely when outside arena
+            const bBody = this.body as Phaser.Physics.Arcade.Body;
+            if (bBody) bBody.setVelocity(0, 0);
+
+            this.tempClouds.forEach(cloud => {
+                const cBody = cloud.body as Phaser.Physics.Arcade.Body;
+                if (cBody) cBody.setVelocity(0, 0);
+            });
+            return;
+        }
+
+        // When inside arena:
+        if (this.bossRespawnPoint) {
+            this.player.activeSpawnX = this.bossRespawnPoint.x;
+            this.player.activeSpawnY = this.bossRespawnPoint.y;
+        }
+        if (!this.hasStarted) {
+            this.hasStarted = true;
+            this.queueNextThunderSequence();
         }
 
         // Lethal Body Contact
