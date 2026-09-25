@@ -7,6 +7,7 @@ export class SoundManager {
     private ctx?: AudioContext;
     public isMuted: boolean = false;
     private settingsManager: SettingsManager;
+    private musicInterval: any;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -123,6 +124,35 @@ export class SoundManager {
         if (this.isMuted) return;
         this.ensureContext();
         this.playTone(200, 850, 'triangle', 0.25, 0.22);
+    }
+
+    public playBossMusic() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (this.musicInterval) return;
+        
+        let step = 0;
+        // Ominous minor scale arpeggio
+        const notes = [220.00, 261.63, 329.63, 293.66, 349.23, 293.66, 261.63, 220.00];
+        
+        this.musicInterval = setInterval(() => {
+            if (this.isMuted) return;
+            const freq = notes[step % notes.length];
+            // Bass thump
+            if (step % 2 === 0) {
+                this.playTone(freq / 2, freq / 4, 'square', 0.15, 0.2);
+            }
+            // Arpeggio
+            this.playTone(freq, freq, 'sawtooth', 0.1, 0.15);
+            step++;
+        }, 150); // 150ms per note (100 BPM 16th notes)
+    }
+
+    public stopMusic() {
+        if (this.musicInterval) {
+            clearInterval(this.musicInterval);
+            this.musicInterval = null;
+        }
     }
 
     private playTone(startFreq: number, endFreq: number, type: OscillatorType, duration: number, volume: number) {

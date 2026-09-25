@@ -348,7 +348,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.scene.events.emit('player-respawn');
     }
 
-    die(reason: 'default' | 'lava' = 'default') {
+    die(reason: 'default' | 'lava' | 'electric' | 'lightning' | string = 'default') {
         if (this.isInvincible || this.isDying) return;
 
         // If player has Totem Shield: absorb death without resetting stage
@@ -360,7 +360,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.setTint(0xffaa00); 
             this.soundManager?.playDeath();
             this.enforceKeyLift();
-            this.scene.time.delayedCall(2000, () => {
+            this.scene.time.delayedCall(3000, () => {
                 this.isInvincible = false;
                 this.clearTint();
             });
@@ -385,8 +385,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         // Emit death event for collectibles & mobs reset
         this.scene.events.emit('player-death');
 
-        if (reason === 'lava') {
-            const isRight = this.facing === 'right';
+        const isRight = this.facing === 'right';
+
+        if (reason === 'lava' || reason === 'fire') {
             const spriteKey = isRight ? 'lava-death-r' : 'lava-death-l';
             const animKey = isRight ? 'lava-death-r-anim' : 'lava-death-l-anim';
             const effectDuration = 520;
@@ -420,23 +421,59 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
                     this.finishRespawn();
                 });
             }
-        } else {
-            // Normal death effect (black soul floating upwards and fading out)
-            const effectDuration = 380;
-            if (this.scene.textures.exists('death-effect')) {
-                const deathSprite = this.scene.add.sprite(deathX, deathY, 'death-effect', 2);
+        } else if (reason === 'electric' || reason === 'lightning' || reason === 'thunder') {
+            // Electric death effect (electric death sprite: top row left-to-right looking right, bottom row right-to-left looking left)
+            const spriteKey = 'electric-death';
+            const animKey = isRight ? 'electric-death-r-anim' : 'electric-death-l-anim';
+            const effectDuration = 650;
+
+            if (this.scene.textures.exists(spriteKey)) {
+                const deathSprite = this.scene.add.sprite(deathX, deathY, spriteKey, isRight ? 0 : 23);
                 deathSprite.setDepth(10);
                 deathSprite.setOrigin(0.5, 0.5);
                 this.activeDeathSprite = deathSprite;
 
-                if (this.scene.anims.exists('death-effect-anim')) {
-                    deathSprite.play('death-effect-anim');
+                if (this.scene.anims.exists(animKey)) {
+                    deathSprite.play(animKey);
                 }
 
                 this.scene.tweens.add({
                     targets: deathSprite,
-                    y: deathY - 32,
-                    alpha: 0,
+                    y: deathY - 12,
+                    alpha: { from: 1, to: 0 },
+                    duration: effectDuration,
+                    ease: 'Sine.easeOut',
+                    onComplete: () => {
+                        if (deathSprite.active) deathSprite.destroy();
+                        if (this.activeDeathSprite === deathSprite) this.activeDeathSprite = undefined;
+                        this.finishRespawn();
+                    }
+                });
+            } else {
+                this.scene.time.delayedCall(effectDuration, () => {
+                    this.finishRespawn();
+                });
+            }
+        } else {
+            // Simple / normal death effect (simple death sprite: top row left-to-right looking right, bottom row right-to-left looking left)
+            const spriteKey = 'simple-death';
+            const animKey = isRight ? 'simple-death-r-anim' : 'simple-death-l-anim';
+            const effectDuration = 550;
+
+            if (this.scene.textures.exists(spriteKey)) {
+                const deathSprite = this.scene.add.sprite(deathX, deathY, spriteKey, isRight ? 0 : 17);
+                deathSprite.setDepth(10);
+                deathSprite.setOrigin(0.5, 0.5);
+                this.activeDeathSprite = deathSprite;
+
+                if (this.scene.anims.exists(animKey)) {
+                    deathSprite.play(animKey);
+                }
+
+                this.scene.tweens.add({
+                    targets: deathSprite,
+                    y: deathY - 24,
+                    alpha: { from: 1, to: 0 },
                     duration: effectDuration,
                     ease: 'Cubic.easeOut',
                     onComplete: () => {

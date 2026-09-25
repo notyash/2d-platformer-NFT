@@ -11,6 +11,7 @@ import { SecurityManager } from '../managers/SecurityManager';
 import { LeaderboardManager } from '../managers/LeaderboardManager';
 import { InputRecorder } from '../managers/InputRecorder';
 import { SurrealService } from '../services/SurrealService';
+import { EleckingBoss } from '../entities/EleckingBoss';
 
 export class MainStageScene extends Phaser.Scene {
     private player!: Player;
@@ -20,6 +21,7 @@ export class MainStageScene extends Phaser.Scene {
     private uiManager!: UIManager;
     private inventoryManager!: InventoryManager;
     private soundManager!: SoundManager;
+    private eleckingBoss?: EleckingBoss;
 
     private groundLayer!: Phaser.Tilemaps.TilemapLayer;
     private oneWayLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -69,8 +71,8 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('lava', 'assets/sprites/blocks/lava.png');
         this.load.image('bush', 'assets/sprites/background/bush.png');
         this.load.image('mountain', 'assets/sprites/background/mountain.png');
-        this.load.image('32 files dungeon', 'assets/sprites/boss/32 files dungeon.png');
-        this.load.image('64 files dungeon', 'assets/sprites/boss/64 files dungeon.png');
+        this.load.spritesheet('32 files dungeon', 'assets/sprites/boss/32 files dungeon.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('64 files dungeon', 'assets/sprites/boss/64 files dungeon.png', { frameWidth: 32, frameHeight: 32 });
         this.load.image('cloud variation', 'assets/sprites/boss/cloud variation.png');
         this.load.image('moving-platform-img', 'assets/sprites/misc/wooden moving platform.png');
         this.load.image('wooden moving platform', 'assets/sprites/misc/wooden moving platform.png');
@@ -135,8 +137,19 @@ export class MainStageScene extends Phaser.Scene {
 
         // Effects
         this.load.spritesheet('death-effect', 'assets/sprites/effects/black death effect sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('electric-death', 'assets/sprites/effects/electric death sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('simple-death', 'assets/sprites/effects/simple death sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('lava-death-l', 'assets/sprites/effects/lava death sprite-l.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('lava-death-r', 'assets/sprites/effects/lava death sprite-r.png', { frameWidth: 32, frameHeight: 32 });
+
+        // Boss Sprites
+        this.load.spritesheet('elecking-power', 'assets/sprites/boss/Elecking Power Attack Sprite.png', { frameWidth: 64, frameHeight: 64 });
+        this.load.spritesheet('temp-platforms', 'assets/sprites/boss/temp platforms.png', { frameWidth: 64, frameHeight: 32 });
+        this.load.image('cloud-attack-1', 'assets/sprites/boss/cloud attack1.png');
+        this.load.image('cloud-attack-2', 'assets/sprites/boss/cloud attack2.png');
+        this.load.image('cloud-attack-3', 'assets/sprites/boss/cloud attack3.png');
+        this.load.image('cloud-attack-4', 'assets/sprites/boss/cloud attack4.png');
+        this.load.image('cloud-attack-5', 'assets/sprites/boss/cloud attack5.png');
 
         // Auto-discover and preload all images and sprites in public/assets/ (including sprites, blocks, misc, backgrounds, etc.)
         const explicitPreloadKeys = new Set<string>([
@@ -262,6 +275,22 @@ export class MainStageScene extends Phaser.Scene {
         // Setup Entities & Level Objects
         this.enemyManager.setupGroundMobs(rawMapObjects, this.groundLayer, this.oneWayLayer, this.hazardsLayer, this.smashLayer);
         this.enemyManager.setupPipeMonsters(map, rawMapObjects);
+
+        const bossSpawnObj = rawMapObjects.find(o => o.name === 'BossSpawn');
+        if (bossSpawnObj && bossSpawnObj.x !== undefined && bossSpawnObj.y !== undefined) {
+            this.eleckingBoss = new EleckingBoss(
+                this, 
+                bossSpawnObj.x, 
+                bossSpawnObj.y, 
+                this.player, 
+                this.uiManager, 
+                this.enemyManager, 
+                this.envManager, 
+                this.soundManager, 
+                rawMapObjects, 
+                map
+            );
+        }
 
         // Ground mobs treat JumpPads and MovingPlatforms as solid obstacles to prevent getting stuck
         if (this.envManager.jumpPads.length > 0) {
@@ -771,6 +800,52 @@ export class MainStageScene extends Phaser.Scene {
             repeat: 0
         });
 
+        // Electric Death Effect (Right: top row 0..7 left-to-right; Left: bottom row 23..16 right-to-left)
+        this.anims.create({
+            key: 'electric-death-r-anim',
+            frames: this.anims.generateFrameNumbers('electric-death', { start: 0, end: 7 }),
+            frameRate: 12,
+            repeat: 0
+        });
+
+        this.anims.create({
+            key: 'electric-death-l-anim',
+            frames: [
+                { key: 'electric-death', frame: 23 },
+                { key: 'electric-death', frame: 22 },
+                { key: 'electric-death', frame: 21 },
+                { key: 'electric-death', frame: 20 },
+                { key: 'electric-death', frame: 19 },
+                { key: 'electric-death', frame: 18 },
+                { key: 'electric-death', frame: 17 },
+                { key: 'electric-death', frame: 16 }
+            ],
+            frameRate: 12,
+            repeat: 0
+        });
+
+        // Simple Death Effect (Right: top row 0..5 left-to-right; Left: bottom row 17..12 right-to-left)
+        this.anims.create({
+            key: 'simple-death-r-anim',
+            frames: this.anims.generateFrameNumbers('simple-death', { start: 0, end: 5 }),
+            frameRate: 12,
+            repeat: 0
+        });
+
+        this.anims.create({
+            key: 'simple-death-l-anim',
+            frames: [
+                { key: 'simple-death', frame: 17 },
+                { key: 'simple-death', frame: 16 },
+                { key: 'simple-death', frame: 15 },
+                { key: 'simple-death', frame: 14 },
+                { key: 'simple-death', frame: 13 },
+                { key: 'simple-death', frame: 12 }
+            ],
+            frameRate: 12,
+            repeat: 0
+        });
+
         // Lava Death Effects (Left: frame 0 -> 5; Right: frame 5 -> 0)
         this.anims.create({
             key: 'lava-death-l-anim',
@@ -864,6 +939,7 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.update(delta);
         this.inventoryManager.update();
         this.enemyManager.update(this.groundLayer, this.oneWayLayer, delta);
+        if (this.eleckingBoss) this.eleckingBoss.update(_time, delta);
         SecurityManager.getInstance().logPlayerPosition(this.player.x, this.player.y);
 
         const currentFrame = Math.floor((this.time.now - this.startTime) / 16.6667);

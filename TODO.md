@@ -42,42 +42,54 @@
 
 ---
 
-### ⏳ Immediate & Near-Term
-- [ ] **Pitfall / Falling Ground Navigation Clarity**: Make it clear at the falling-down-through-the-ground section that players cannot proceed to the right side and must fall down.
-- [ ] **Pipe Monster Pop-out Refinement**:
-  - Fine-tune Pipe Monster emergence height and distance relative to the pipe's top rim so it never appears disconnected or floating above the pipe surface across all pipe placements.
-- [ ] **UI Polish & Visual Enhancements**:
+### ⏳ Active Development & Asset Pipeline
+- [ ] **1. Replace 2 Old Mobs**: Swap out 2 old mobs from the free asset pack with new designated mob sprites.
+- [ ] **2. Skeleton Bomb Minion Mob**: Add skeleton bomb mob as the summonable minion that the Elecking Boss spawns on the ground (max 2 waves per fight).
+- [ ] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
+- [ ] **4. New Checkpoint Asset**: Replace/upgrade the checkpoint banner and visual pole/flag assets.
+- [ ] **5. Bridge Smash Ground Asset**: Add bridge sprite as the new destructible / smash ground asset.
+- [ ] **6. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
+- [ ] **7. New Bullet Sprite**: Upgrade the blaster projectile sprite and impact animations.
+- [ ] **8. All Orbs Assets**: Integrate dedicated sprites for all boss fight orbs (Gravity Orbs, Orbs of Rage, and Orb of Victory).
+- [ ] **9. Redesign Stage Below First Smash Ground**: Overhaul and rebalance the level design in the lower stage section beneath the first smash ground.
+- [ ] **10. Totem Respawn Animation**: Add dedicated activation and revival animation sequence for the Totem of Undying.
+- [ ] **11. Simple Death Effect**: Implement standard player elimination visual FX and particle burst.
+- [ ] **12. Electric Death Effect**: Implement electric shock / thunder strike death animation and effects (`cloud attack1.png` - `cloud attack5.png`).
+- [ ] **13. Gun Movement Effects (Walking & Falling)**: Add specialized walking and airborne/falling animation frames while holding the Blaster Gun.
+- [ ] **14. New Jump Pad Asset & Mechanics**: Add spring / jump pad asset with physics bounce trajectory.
+- [ ] **15. Improve Background**: Enhance multi-layer parallax backgrounds, atmospheric lighting, and world depth.
+- [ ] **16. UI Polish & Visual Glassmorphism**:
   - Modernize HUD design with crisp retro glassmorphism, responsive status bars, and vibrant equipment status cards.
   - Refine pause menu and overlay layouts, improving button hover effects, typography, and spacing.
   - Add micro-animations and smooth transition effects for banners (checkpoint notifications, respawn alerts, timer cues).
-- [ ] **Implement Bonsai Gripper Mob & Mechanics**:
-  - Implement full behavior tree, patrol paths, and custom animation states for the Bonsai Gripper enemy.
-  - Add unique combat / grasping interactions, hazard zones, and audio-visual cues.
-- [ ] **Better Use & Integration of All Collectibles**:
-  - Expand the utility of coins, gems, keys, totems, and powerups beyond basic counters.
-  - Integrate collectibles into progression mechanics (e.g., secret area unlock gates, ability upgrades, score multipliers, or temporary buffs).
-- [ ] **Configurable Difficulty Modes (Easy / Medium / Hardcore)**:
-  - **Easy**: More frequent checkpoints, relaxed hazard intervals, and forgiving mob reaction times.
-  - **Medium**: Standard checkpoint distribution and default gameplay balancing.
-  - **Hardcore**: Zero checkpoints (full run reset to start on death), faster projectile/mob attack speeds, and stricter platforming windows.
-- [ ] **Stage Clear / Victory Trigger**: Add an end-of-stage goal portal / artifact that stops the speedrun timer and shows a victory summary screen.
-- [ ] **Mini-Boss Encounter**: Add an end-of-stage mini-boss challenge before the final exit.
+
+---
+
+### 👾 Boss Encounter (Elecking)
+- [ ] **Elecking Boss State Machine & Logic**:
+  - Ground & Air hovering behavior (instant player death on physical contact).
+  - Gravity Orbs mechanics to ground the boss.
+  - Patterned Thunder/Lightning attack with vanishing boss phase and strikable ground tiles (`dotNumber`).
+  - Orbs of Rage projectile attacks while grounded.
+  - Temporary Cloud Platforms appearing/disappearing for vertical evasion.
+  - Skeleton Bomb mob summon at 35 HP and 15 HP thresholds (50 total HP).
+  - Orb of Victory spawn upon boss defeat.
 
 ---
 
 ### 🌐 Backend, SurrealDB & Anti-Cheat System
 - [x] **SurrealDB Backend & Database Layer**: Native SurrealQL tables (`player`, `run_session`, `leaderboard`, `whitelist`) and backend business functions (`fn::start_run`, `fn::submit_run`, `fn::get_leaderboard`).
-- [x] **Modular DB Architecture**: Abstracted into clean modular files in `src/db/` (`init.surql`, `tables/*.surql`, `functions/*.surql`).
+- [x] **Modular DB Architecture**: Abstracted into clean modular files in `src/db/` (`init.surql`, `tables/*.surql`, `functions/*.surql`, `access/*.surql`).
 - [x] **Docker Compose Orchestration**: Single-command bootup (`docker compose up`) for SurrealDB engine, auto-migration service, and Vite frontend.
 - [x] **Deterministic Keystroke Input Recorder**: Client-side zero-GC frame input logger (`InputRecorder.ts`) recording inputs for backend anti-cheat verification.
-- [x] **Direct SurrealDB Client Service**: Direct WebSocket/HTTP connection via official SDK (`SurrealService.ts`) with seamless offline fallback.
+- [x] **Direct SurrealDB Client Service**: Direct WebSocket/HTTP connection via official SDK (`SurrealService.ts`) with Web3 wallet record auth (`signinWithWallet`).
 
 ---
 
 ### 🚀 Production & Mainnet Launch Checklist (Before Going Live)
-- [ ] **Switch SurrealQL from `OVERWRITE` to `IF NOT EXISTS`**: In `src/db/init.surql`, `src/db/tables/*.surql`, and `src/db/functions/*.surql`, change all `OVERWRITE` keywords back to `IF NOT EXISTS` so table metadata and records are never accidentally modified on live server restarts.
+- [ ] **Switch SurrealQL from `OVERWRITE` to `IF NOT EXISTS`**: In `src/db/init.surql`, `src/db/tables/*.surql`, and `src/db/functions/*.surql`, change all `OVERWRITE` keywords back to `IF NOT EXISTS`.
 - [ ] **Switch Database Name from `development` to `production`**: Update `USE DB development;` to `USE DB production;` in `init.surql`, `docker-compose.yml`, and `SurrealService.ts`.
-- [ ] **Configure Cloudflare Turnstile Live Keys**: Set production Turnstile Site Key & Secret Key in environment variables for zero-friction bot protection on run start.
+- [ ] **Configure Cloudflare Turnstile Live Keys**: Set production Turnstile Site Key & Secret Key in environment variables for bot protection on run start.
 - [ ] **Configure Production SurrealDB Cloud / VPS Connection**: Provide production `VITE_SURREAL_URL`, credentials, and SSL/WSS certificates.
 
 ---
@@ -85,6 +97,7 @@
 ### 🎨 Gameplay Polish & World Expansion
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
-- [ ] **Manual Monster Spritesheet Padding**: Fix / add 1-2px internal transparent margin to monster PNGs (Sandal Mob, Bonsai Gripper, Lava Kappa, Shiro Onna) to eliminate 1px top-edge border clipping without losing sprite details.
+- [ ] **Manual Monster Spritesheet Padding**: Fix / add 1-2px internal transparent margin to monster PNGs to eliminate 1px border clipping.
+
 
 

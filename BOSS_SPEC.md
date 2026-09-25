@@ -36,7 +36,15 @@ The AI assistant must guide the user on setting up these objects in Tiled:
 2. **`BossArenaZone`**: Rectangle object defining the arena boundary where camera locks and boss music/fight triggers.
 3. **`BossSpawn`**: Point object for Elecking's starting aerial hover coordinate.
 4. **`TemporaryCloud`**: Objects placed along the cloud parkour route.
-   - Custom Properties: `standDurationMs: int (e.g. 1800)`, `respawnDelayMs: int (e.g. 2500)`.
+   - **Fade Properties**:
+     - `canFade: bool` (default: `true`) — set to `false` if you want a permanent non-fading cloud platform.
+     - `standDurationMs: int` (default: `1600`) — time in ms (or seconds) before the platform fades through all 4 frames and vanishes.
+     - `respawnDelayMs: int` (default: `2500`) — time in ms (or seconds) before the cloud platform respawns after vanishing.
+   - **Moving Platform Properties**:
+     - `distance: float` (default: `0`) — travel distance in pixels (e.g., `120`). Setting `distance > 0` makes the platform move back and forth!
+     - `speed: float` (default: `50`) — patrol movement speed.
+     - `axis: string` (`"x"` or `"y"`, default: `"x"`) — horizontal (`"x"`) or vertical (`"y"`) movement.
+     - `direction: int` (`1` or `-1`, default: `1`) — initial movement direction (`1` = right/down, `-1` = left/up).
 5. **`GravityOrb`**: 10 preset point objects placed on cloud routes.
    - Custom Property: `orbIndex: int (1 to 10)`.
 6. **`TotemSpawn`**: Secret/challenging parkour spot to collect the optional Totem of Undying.
