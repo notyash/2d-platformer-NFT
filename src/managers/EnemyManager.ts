@@ -1139,6 +1139,17 @@ export class EnemyManager {
             }
         }
 
+        if (this.envManager && this.envManager.movingPlatforms) {
+            for (const plat of this.envManager.movingPlatforms) {
+                if (plat.active && plat.visible) {
+                    const pBounds = plat.getBounds();
+                    if (Phaser.Geom.Intersects.LineToRectangle(this.losLine, pBounds)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
         if (!this.groundLayer && !this.smashLayer) return true;
         
         if (this.groundLayer) {
@@ -1579,21 +1590,31 @@ export class EnemyManager {
                     const range = (mob.getData('range') as number) || 380;
                     const inRange = distToPlayer <= range;
 
+                    const mobScale = (mob.getData('scale') as number) || 1.0;
+                    const eyeX = mob.x;
+                    const eyeY = mob.y - 14 * mobScale;
+                    const targetX = this.player.x;
+                    const targetY = this.player.y - 8;
+
+                    const playerZone = this.ignoreLOSZones.find(z => Phaser.Geom.Rectangle.Contains(z, this.player.x, this.player.y));
+                    const shouldBypassLOS = ignoreLOS || Boolean(playerZone);
+                    const canSeePlayer = inRange && (shouldBypassLOS || this.hasLineOfSight(eyeX, eyeY, targetX, targetY));
+
                     if (isStationary || speed === 0) {
                         // Standstill / Stationary Lava Kappa
                         mob.setVelocityX(0);
                         if (mob.anims.isPlaying) {
                             mob.anims.stop();
                         }
-                        if (inRange) {
-                            // Turn to face the player's direction
+                        if (canSeePlayer) {
+                            // Turn to face the player's direction only if player is in visible line of sight
                             const aimDir = this.player.x < mob.x ? -1 : 1;
                             dir = aimDir;
                             mob.setData('direction', dir);
                         }
                         mob.setTexture('mob-lava-kappa', dir === 1 ? 4 : 0);
-                    } else if (inRange) {
-                        // Non-stationary Lava Kappa: Follow player when in range
+                    } else if (canSeePlayer) {
+                        // Non-stationary Lava Kappa: Follow player only when in range AND line of sight is clear
                         const aimDir = this.player.x < mob.x ? -1 : 1;
                         dir = aimDir;
                         mob.setData('direction', dir);
@@ -1648,7 +1669,8 @@ export class EnemyManager {
                             mob.setTexture('mob-lava-kappa', dir === 1 ? 4 : 0);
                         }
                     } else {
-                        // Non-stationary Lava Kappa: Moving patrol mob logic if out of agro range
+                        // Non-stationary Lava Kappa: If out of range OR LOS is blocked by any obstacle/ground,
+                        // carry on moving along its path normally
                         const lastTurnTime = (mob.getData('lastTurnTime') as number) || 0;
                         const canTurn = (currentTime - lastTurnTime > 150);
 
@@ -2007,7 +2029,18 @@ export class EnemyManager {
                 mob.setVelocityX(0);
 
                 if (isNearCamera) {
-                    const horizontalFacing = canShoot ? (this.player.x < mob.x ? -1 : 1) : ((mob.getData('initialDirection') as number) || (mob.getData('direction') as number) || 1);
+                    const mobScale = (mob.getData('scale') as number) || 1.0;
+                    const eyeX = mob.x;
+                    const eyeY = mob.y - 14 * mobScale;
+                    const targetX = this.player.x;
+                    const targetY = this.player.y - 8;
+                    const playerZone = this.ignoreLOSZones.find(z => Phaser.Geom.Rectangle.Contains(z, this.player.x, this.player.y));
+                    const shouldBypassLOS = ignoreLOS || Boolean(playerZone);
+                    const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
+                    const range = (mob.getData('range') as number) || 380;
+                    const canSeePlayer = canShoot && distToPlayer <= range && (shouldBypassLOS || this.hasLineOfSight(eyeX, eyeY, targetX, targetY));
+
+                    const horizontalFacing = canSeePlayer ? (this.player.x < mob.x ? -1 : 1) : ((mob.getData('initialDirection') as number) || (mob.getData('direction') as number) || 1);
                     const animKey = this.getMobAnimKey(mobType, horizontalFacing);
                     if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
                         mob.play(animKey, true);

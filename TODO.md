@@ -13,6 +13,25 @@
 ## 📋 Task List
 
 ### ✅ Completed
+- [x] **Destructible Bridges & Smash Ground Mechanics**:
+  - Integrated `new bridge break sprite.png` (96x32) with a 4-frame shattering animation at 6 FPS.
+  - Smooth smash fall detection, downward impact velocity resistance, WebAudio crumbling wood sound synthesis, subtle screen shake, and wooden splinter particle effects.
+  - Complete checkpoint snapshotting, rollback, and run reset support.
+- [x] **Elecking Boss Encounter State Machine & Arena Isolation**:
+  - Integrated `Elecking Power Attack Sprite 96.png` with pixel-tight hitbox framing for idle and drum states.
+  - Telegraphed 3-drum sequence (randomized e.g. 1-3-5, 3-5-1) with 1s frame display, followed by `Elecking Powerup 96.png` powerup sequence before vanishing.
+  - Timed vanishing phase (3-4s) followed by sequential thunder strikes raining down onto mapped `dotNumber` ground tiles.
+  - Phase 2 grounded patrol with player pursuit, Orbs of Rage firing, and minion summoning.
+  - Moving `TemporaryCloud` platform evasion with stand duration, step fading (3 -> 2 -> 1 -> 0), and respawn cycles.
+  - `BossArenaZone` cover tile sprite occlusion (`plainGround.png`) outside arena, unfreezing boss and moving platforms upon crossing `BossFightEntrance`.
+  - Arena state persistence on death inside the arena, with clean full reset on run restart or checkpoint rollback.
+- [x] **Lava Kappa & Mob AI Line-of-Sight (LOS) System**:
+  - Player detection and follow behavior within detection range.
+  - Fireball shooting with exact player-facing direction and mouth offset coordinates.
+  - Raycasted Line-of-Sight (LOS) checking ground tiles, smash blocks, destructible bridges, and moving platforms: when LOS is obstructed, mobs ignore hidden players and smoothly continue their regular patrol path.
+  - Strict `standStill: true` / stationary behavior: stays fixed in place without walking animations, turning only when the player is in visible line of sight.
+- [x] **Static In-World Door Prompt**: Fixed stationary "Press E To Enter" badge anchored directly above teleporter door entrances.
+- [x] **New Jump Pad Asset & Mechanics**: Added spring / jump pad asset with physics bounce trajectory, 4-frame animation, and pixel-accurate 8px bottom hitbox.
 - [x] **Simple Death Effect**: Directional left/right player elimination death animation sequences using `simple death sprite.png` (`simple-death-l-anim` & `simple-death-r-anim`) with particle bursts.
 - [x] **Electric Death Effect**: Directional left/right electric shock / thunder strike death animation sequences using `electric death sprite.png` (`electric-death-l-anim` & `electric-death-r-anim`).
 - [x] **Active Gameplay Run Timer**: Accurate delta-based run timer (`activeRunTimeMs`) that strictly accumulates during active gameplay and pauses seamlessly during death animations, checkpoint respawns, and pause menus.
@@ -34,7 +53,6 @@
   - Configured `Dockerfile` (Node 20 Alpine) and `docker-compose.yml` to boot SurrealDB, execute schema migrations, and serve the Vite frontend with a single command (`docker compose up`).
 - [x] **Deterministic Keystroke Input Recorder**:
   - Client-side zero-GC frame ring buffer (`InputRecorder.ts`) recording player keystrokes at 60 ticks/sec for backend anti-cheat re-simulation.
-- [x] **Static "Press E To Enter" Door Prompt**: Made the door interaction prompt stationary above the entrance rather than floating dynamically with player coordinates.
 - [x] **Transparent Jump Mechanics Guide at Start**: Added subtle, semi-transparent in-world tutorial description near spawn explaining jump controls (`[SPACE]` / `[W]` / `[↑]`) and variable jump height mechanics (Tap for Short-Hop, Hold for High Jump).
 - [x] **Mobile Device Access Guard & Restriction**: Added mobile device / touchscreen detection with a modern retro-styled desktop-only restriction overlay.
 - [x] **`[C]` Keybind for Quick Checkpoint Respawn**: Added instant reset to active checkpoint when pressing `C` (shows fallback feedback if no checkpoint is active yet).
@@ -59,17 +77,18 @@
 - [x] **Interactive `ESC` Pause Menu**: Keyboard and mouse navigation with Resume, Restart Run, and Sound Toggle.
 - [x] **Accidental Reload Guard**: `beforeunload` browser protection against accidental speedrun loss.
 - [x] **Air / Flying Mobs (`FlyingMob`)**: Configurable aerial patrol hazards with tile-based `distance` (1 = 1 tile / 32px), `axis` (`horizontal` / `vertical`), directional flight animations, stomping, blaster elimination, and optional shooting.
-- [x] **Retro 8-Bit SFX Engine**: Native WebAudio synthesis for Jump, Shoot, Enemy Shoot, Coin, Powerup, Stomp, Death, and UI clicks.
+- [x] **All Orbs Assets & Mechanics (Gravity Orbs, Orbs of Rage, Victory Orb)**:
+  - Integrated dedicated 128x32 animated 4-frame spritesheets (`attack orb.png`, `gravity orb.png`, `victory orb.png`).
+  - Implemented 10-collectible Gravity Orbs system to ground and trigger Phase 2 vulnerability for Elecking Boss.
+  - Implemented Orbs of Rage boss projectile firing during Phase 2 ground patrol.
+  - Implemented Orb of Victory spawning upon boss defeat with fanfare, portal emergence, and SurrealDB stage clear completion.
 
 ---
 
 ### ⏳ Active Development & Asset Pipeline
 - [ ] **1. Skeleton Bomb Minion Mob**: Add skeleton bomb mob as the summonable minion that the Elecking Boss spawns on the ground (max 2 waves per fight).
-- [ ] **2. All Orbs Assets & Mechanics**: Integrate dedicated sprites & logic for all boss fight orbs (Gravity Orbs, Orbs of Rage, and Orb of Victory).
 - [ ] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
 - [ ] **4. New Checkpoint Asset**: Replace/upgrade the checkpoint banner and visual pole/flag assets.
-- [x] **5. Bridge Smash Ground Asset**: Add bridge sprite as the new destructible / smash ground asset with 4-frame break animation and uninterrupted smash mechanics.
-- [x] **6. New Jump Pad Asset & Mechanics**: Add spring / jump pad asset with physics bounce trajectory, 4-frame left-to-right animation, and pixel-accurate 8px bottom hitbox.
 - [ ] **7. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
 - [ ] **8. New Bullet Sprite**: Upgrade the blaster projectile sprite and impact animations.
 - [ ] **9. Redesign Stage Below First Smash Ground**: Overhaul and rebalance the level design in the lower stage section beneath the first smash ground.
@@ -85,18 +104,6 @@
 
 ---
 
-### 👾 Boss Encounter (Elecking)
-- [ ] **Elecking Boss State Machine & Logic**:
-  - Ground & Air hovering behavior (instant player death on physical contact).
-  - Gravity Orbs mechanics to ground the boss.
-  - Patterned Thunder/Lightning attack with vanishing boss phase and strikable ground tiles (`dotNumber`).
-  - Orbs of Rage projectile attacks while grounded.
-  - Temporary Cloud Platforms appearing/disappearing for vertical evasion.
-  - Skeleton Bomb mob summon at 35 HP and 15 HP thresholds (50 total HP).
-  - Orb of Victory spawn upon boss defeat.
-
----
-
 ### 🚀 Production & Mainnet Launch Checklist (Before Going Live)
 - [ ] **Switch SurrealQL from `OVERWRITE` to `IF NOT EXISTS`**: In `src/db/init.surql`, `src/db/tables/*.surql`, and `src/db/functions/*.surql`, change all `OVERWRITE` keywords back to `IF NOT EXISTS`.
 - [ ] **Switch Database Name from `development` to `production`**: Update `USE DB development;` to `USE DB production;` in `init.surql`, `docker-compose.yml`, and `SurrealService.ts`.
@@ -109,4 +116,5 @@
 - [ ] **Fix after checking all dangling grey lines appearing on all the assets in the game**: Thoroughly audit and clean all sprite sheets, tile boundaries, and map object coordinates to eliminate faint grey lines and subpixel border artifacts.
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
+
 
