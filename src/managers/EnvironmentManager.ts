@@ -44,6 +44,18 @@ export interface CheckpointData {
     activated: boolean;
 }
 
+export interface BridgeData {
+    sprite: Phaser.Physics.Arcade.Sprite;
+    initialX: number;
+    initialY: number;
+    width: number;
+    height: number;
+    broken: boolean;
+    snapshotBroken: boolean;
+    collider?: Phaser.Physics.Arcade.Collider;
+    bulletCollider?: Phaser.Physics.Arcade.Collider;
+}
+
 export class EnvironmentManager {
     private scene: Phaser.Scene;
     private player: Player;
@@ -55,6 +67,7 @@ export class EnvironmentManager {
     public jumpPads: Phaser.Physics.Arcade.Sprite[] = [];
     public firebars: Firebar[] = [];
     public smashTriggers: Phaser.GameObjects.Zone[] = [];
+    public bridges: BridgeData[] = [];
     public doorZones: Phaser.GameObjects.Zone[] = [];
     public doorExitZones: Phaser.GameObjects.Zone[] = [];
     public disarmZones: Phaser.GameObjects.Zone[] = [];
@@ -66,7 +79,7 @@ export class EnvironmentManager {
 
     public doorExitX: number = 0;
     public doorExitY: number = 0;
-    private doorPrompt?: Phaser.GameObjects.Container;
+    public doorPrompts: Phaser.GameObjects.Container[] = [];
 
     constructor(
         scene: Phaser.Scene, 
@@ -463,6 +476,9 @@ export class EnvironmentManager {
         }
         
         this.doorZones = [];
+        this.doorPrompts.forEach(p => p.destroy());
+        this.doorPrompts = [];
+
         rawMapObjects.filter((obj: any) => obj.name === 'DoorZone' || obj.name === 'DoorEntrance').forEach((obj: any) => {
             const zW = obj.width || 32;
             const zH = (obj.height || 48) + 64;
@@ -471,6 +487,27 @@ export class EnvironmentManager {
             const zone = this.scene.add.zone(zX, zY, zW, zH);
             this.scene.physics.add.existing(zone, true); 
             this.doorZones.push(zone);
+
+            // Static "Press E To Enter" badge permanently fixed directly above the teleporter door
+            const promptX = zX;
+            const promptY = (obj.y || 0) - 14;
+
+            const bg = this.scene.add.graphics();
+            bg.fillStyle(0x0f172a, 0.9);
+            bg.fillRoundedRect(-58, -14, 116, 28, 8);
+            bg.lineStyle(1.5, 0x38bdf8, 0.95);
+            bg.strokeRoundedRect(-58, -14, 116, 28, 8);
+
+            const txt = this.scene.add.text(0, 0, 'Press E To Enter', {
+                fontSize: '12px',
+                fontFamily: 'Arial, sans-serif',
+                color: '#f8fafc',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+
+            const prompt = this.scene.add.container(promptX, promptY, [bg, txt]);
+            prompt.setDepth(30);
+            this.doorPrompts.push(prompt);
         });
     }
 
@@ -813,6 +850,151 @@ export class EnvironmentManager {
         }
     }
 
+    setupBridges(_map: Phaser.Tilemaps.Tilemap, rawMapObjects: any[]) {
+        this.bridges = [];
+
+        // 1. Locate all Bridge objects from map object layer
+        let bridgeObjs = rawMapObjects.filter((obj: any) => {
+            const name = String(obj.name || '').trim().toLowerCase();
+            const type = String(obj.type || '').trim().toLowerCase();
+            return name === 'bridge' || name.startsWith('bridge') || type === 'bridge';
+        });
+
+        // 2. Fallback in case tilemap on disk hasn't saved the object layer yet:
+        // Populate standard smash ground locations at (2464, 736) and (4640, 768)
+        if (bridgeObjs.length === 0) {
+            bridgeObjs = [
+                { name: 'Bridge', x: 2464, y: 736, width: 96, height: 32 },
+                { name: 'Bridge', x: 4640, y: 768, width: 96, height: 32 }
+            ];
+        }
+
+        bridgeObjs.forEach((obj: any) => {
+            const hasGid = obj.gid !== undefined;
+            const posX = obj.x || 0;
+            const posY = hasGid ? (obj.y - (obj.height || 32)) : (obj.y || 0);
+            const width = obj.width || 96;
+            const height = obj.height || 32;
+
+            const sprite = this.scene.physics.add.sprite(posX, posY, 'bridge-break', 0);
+            sprite.setOrigin(0, 0);
+            sprite.setDisplaySize(96, 32);
+            sprite.setDepth(2.8);
+
+            const body = sprite.body as Phaser.Physics.Arcade.Body;
+            body.setAllowGravity(false);
+            body.setImmovable(true);
+            body.moves = false;
+            body.setSize(96, 32);
+            body.setOffset(0, 0);
+
+            const bridgeData: BridgeData = {
+                sprite,
+                initialX: posX,
+                initialY: posY,
+                width,
+                height,
+                broken: false,
+                snapshotBroken: false
+            };
+
+            // Player vs Bridge Collider
+            const playerCollider = this.scene.physics.add.collider(
+                this.player, 
+                sprite, 
+                undefined, 
+                (_p, _s) => {
+                    if (bridgeData.broken) return false;
+
+                    const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+                    const bridgeTop = sprite.y;
+
+                    // Check if player is falling down onto the top surface of the bridge
+                    const isFallingOnTop = pBody.velocity.y > 0 && pBody.bottom <= bridgeTop + 16;
+
+                    if (isFallingOnTop && this.player.canSmash) {
+                        this.breakBridge(bridgeData);
+                        return false; // Break through without collision obstruction
+                    }
+
+                    // Solid platform when landing or standing on top
+                    return pBody.velocity.y >= 0 && pBody.bottom <= bridgeTop + 16;
+                }
+            );
+            bridgeData.collider = playerCollider;
+
+            // Player Bullets vs Bridge Collider
+            const bulletCollider = this.scene.physics.add.collider(
+                this.player.bullets, 
+                sprite, 
+                (bulletObj) => {
+                    if (!bridgeData.broken) {
+                        const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+                        this.uiManager.spawnParticles(bullet.x, bullet.y, 0x8B5A2B);
+                        bullet.destroy();
+                    }
+                },
+                () => !bridgeData.broken
+            );
+            bridgeData.bulletCollider = bulletCollider;
+
+            this.bridges.push(bridgeData);
+        });
+    }
+
+    public breakBridge(bridge: BridgeData) {
+        if (bridge.broken) return;
+        bridge.broken = true;
+
+        const sprite = bridge.sprite;
+        const body = sprite.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.enable = false;
+        }
+
+        // Play 4-frame breaking animation (left to right: frame 0 -> 1 -> 2 -> 3)
+        sprite.play('bridge-break-anim');
+
+        // Sound effect: Crumbling wood / bridge break
+        this.soundManager?.playBridgeBreak();
+
+        // Screen shake
+        this.scene.cameras.main.shake(250, 0.012);
+
+        // Low density wooden break particles
+        const centerX = sprite.x + 48;
+        const centerY = sprite.y + 16;
+        const woodColors = [0x8B4513, 0xA0522D, 0x6B4226, 0x5C3317, 0x7E481C, 0xCD853F];
+        this.uiManager.spawnParticles(
+            centerX + Phaser.Math.Between(-30, 30),
+            centerY + Phaser.Math.Between(-8, 8),
+            woodColors[1 % woodColors.length]
+        );
+
+        // Float impact feedback text
+        this.uiManager.showFloatingText(centerX, sprite.y - 12, 'CRASH!', '#D2B48C');
+
+        // Add impact resistance: dampen downward velocity upon smashing through the bridge
+        if (this.player && this.player.body) {
+            const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+            const currentVY = pBody.velocity.y;
+            const resistedVY = Math.min(Math.max(currentVY * 0.22, 60), 130);
+            pBody.setVelocityY(resistedVY);
+        }
+        this.player.canSmash = false;
+
+        // Once animation completes, smooth fade
+        sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+            this.scene.tweens.add({
+                targets: sprite,
+                alpha: 0,
+                duration: 500,
+                delay: 200,
+                ease: 'Power2'
+            });
+        });
+    }
+
     setupDandelions(rawMapObjects: any[]) {
         this.dandelions = [];
         rawMapObjects.filter((obj: any) => {
@@ -1041,44 +1223,13 @@ export class EnvironmentManager {
 
         // Handle Teleport Door (Standard Door Teleporter without checkpoint lock)
         let isPlayerInDoor = false;
-        let activeDoorZone: Phaser.GameObjects.Zone | null = null;
         for (const zone of this.doorZones) {
             if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, zone.getBounds())) {
                 isPlayerInDoor = true;
-                activeDoorZone = zone;
                 break;
             }
         }
         this.player.isNearDoor = isPlayerInDoor;
-
-        if (isPlayerInDoor && activeDoorZone) {
-            // Display static "Press E To Enter" prompt fixed directly above the door entrance
-            if (!this.doorPrompt) {
-                const promptX = activeDoorZone.x;
-                const promptY = activeDoorZone.y - (activeDoorZone.height / 2) - 8;
-
-                const bg = this.scene.add.graphics();
-                bg.fillStyle(0x0f172a, 0.9);
-                bg.fillRoundedRect(-58, -14, 116, 28, 8);
-                bg.lineStyle(1.5, 0x38bdf8, 0.95);
-                bg.strokeRoundedRect(-58, -14, 116, 28, 8);
-
-                const txt = this.scene.add.text(0, 0, 'Press E To Enter', {
-                    fontSize: '12px',
-                    fontFamily: 'Arial, sans-serif',
-                    color: '#f8fafc',
-                    fontStyle: 'bold'
-                }).setOrigin(0.5);
-
-                this.doorPrompt = this.scene.add.container(promptX, promptY, [bg, txt]);
-                this.doorPrompt.setDepth(30);
-            }
-        } else {
-            if (this.doorPrompt) {
-                this.doorPrompt.destroy();
-                this.doorPrompt = undefined;
-            }
-        }
 
         const enterPressed = Phaser.Input.Keyboard.JustDown(this.player.keyE) ||
                              Phaser.Input.Keyboard.JustDown(this.player.enterKey) ||
@@ -1086,10 +1237,6 @@ export class EnvironmentManager {
                              (this.player.keyW && Phaser.Input.Keyboard.JustDown(this.player.keyW));
 
         if (isPlayerInDoor && enterPressed && this.doorExitX !== 0) {
-            if (this.doorPrompt) {
-                this.doorPrompt.destroy();
-                this.doorPrompt = undefined;
-            }
             this.player.isNearDoor = false;
             this.player.setPosition(this.doorExitX, this.doorExitY); 
             this.player.setVelocity(0, 0);
@@ -1147,6 +1294,9 @@ export class EnvironmentManager {
         for (const reveal of this.revealTileLayers) {
             reveal.snapshotRevealed = reveal.revealed;
         }
+        for (const bridge of this.bridges) {
+            bridge.snapshotBroken = bridge.broken;
+        }
     }
 
     public rollbackToCheckpoint() {
@@ -1160,6 +1310,23 @@ export class EnvironmentManager {
                 reveal.layer.setVisible(reveal.revealed);
                 reveal.layer.setAlpha(reveal.revealed ? 1 : 0);
                 if (reveal.collider) reveal.collider.active = reveal.revealed;
+            }
+        }
+
+        for (const bridge of this.bridges) {
+            bridge.broken = bridge.snapshotBroken;
+            const sprite = bridge.sprite;
+            const body = sprite.body as Phaser.Physics.Arcade.Body;
+            if (bridge.broken) {
+                sprite.setVisible(false);
+                sprite.setAlpha(0);
+                if (body) body.enable = false;
+            } else {
+                this.scene.tweens.killTweensOf(sprite);
+                sprite.setVisible(true);
+                sprite.setAlpha(1);
+                sprite.setFrame(0);
+                if (body) body.enable = true;
             }
         }
     }
@@ -1177,6 +1344,18 @@ export class EnvironmentManager {
             if (reveal.collider) {
                 reveal.collider.active = reveal.revealed;
             }
+        }
+
+        for (const bridge of this.bridges) {
+            bridge.broken = false;
+            bridge.snapshotBroken = false;
+            const sprite = bridge.sprite;
+            const body = sprite.body as Phaser.Physics.Arcade.Body;
+            this.scene.tweens.killTweensOf(sprite);
+            sprite.setVisible(true);
+            sprite.setAlpha(1);
+            sprite.setFrame(0);
+            if (body) body.enable = true;
         }
 
         this.movingPlatforms.forEach(plat => {

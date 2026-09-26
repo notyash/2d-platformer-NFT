@@ -42,10 +42,12 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     private orbsOfRageGroup: Phaser.Physics.Arcade.Group;
     private dotBlocks: Phaser.Physics.Arcade.StaticGroup;
 
-    // Movement
+    // Movement & Attack Timers
     private patrolSpeed: number = 60; // Slow/Medium speed
     private flyTarget?: { x: number, y: number };
     private flyTowardsPlayer: boolean = false;
+    private nextAttackTimer: number = 2000;
+    private phase2ThunderTimer: number = 15000;
 
     constructor(
         scene: Phaser.Scene, 
@@ -469,6 +471,7 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     public activateEncounter() {
         if (this.hasStarted) return;
         this.hasStarted = true;
+        this.nextAttackTimer = 2000;
         if (this.arenaCover) {
             this.arenaCover.setVisible(false);
         }
@@ -505,6 +508,8 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         this.flyTarget = undefined;
         this.flyTowardsPlayer = false;
         this.collectedOrbs = 0;
+        this.nextAttackTimer = 2000;
+        this.phase2ThunderTimer = 15000;
 
         // Clear all boss projectiles
         this.orbsOfRageGroup.clear(true, true);
@@ -581,6 +586,7 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         this.phase = 1;
         this.isInvulnerable = true;
         this.bossState = 'idle';
+        this.nextAttackTimer = 2000;
         this.setTexture('elecking-power');
         this.setBossFrame(0);
         this.setVisible(true);
@@ -592,25 +598,10 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         if (!retainPosition) {
             this.setPosition(this.initialSpawn.x, this.initialSpawn.y);
         }
-        if (this.hasStarted && this.isPlayerInArena()) {
-            this.queueNextThunderSequence();
-        }
-    }
-
-    private queueNextThunderSequence() {
-        if (this.phase !== 1 && this.phase !== 2) return;
-        if (this.isDead || !this.hasStarted) return;
-
-        this.bossState = 'idle';
-        this.scene.time.delayedCall(3000, () => {
-            if (this.isPlayerInArena() && !this.isDead) {
-                this.playThunderTelegraph();
-            }
-        });
     }
 
     private playThunderTelegraph() {
-        if (this.isDead || !this.isPlayerInArena()) return;
+        if (this.isDead) return;
         this.bossState = 'memory-telegraph';
         this.anims.stop();
         (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
@@ -622,7 +613,7 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         // Step through each drum in the sequence displaying its specific frame sequentially for 1 second each
         let step = 0;
         const playNextDrum = () => {
-            if (this.isDead || !this.isPlayerInArena() || this.bossState !== 'memory-telegraph') return;
+            if (this.isDead || this.bossState !== 'memory-telegraph') return;
 
             if (step < this.currentSequence.length) {
                 const drumNumber = this.currentSequence[step];
@@ -652,21 +643,21 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     }
 
     private vanishAndStrike() {
-        if (this.isDead || !this.isPlayerInArena()) return;
+        if (this.isDead) return;
         this.bossState = 'vanished';
         this.setVisible(false);
         (this.body as Phaser.Physics.Arcade.Body).setEnable(false);
 
         // Disappear for 3-4 seconds, then strike
         this.scene.time.delayedCall(Phaser.Math.Between(3000, 4000), () => {
-            if (this.isPlayerInArena() && !this.isDead) {
+            if (!this.isDead) {
                 this.executeThunderStrikes();
             }
         });
     }
 
     private executeThunderStrikes() {
-        if (this.isDead || !this.isPlayerInArena()) return;
+        if (this.isDead) return;
         this.bossState = 'striking';
 
         // Strike the tiles matching the boss's telegraphed pattern in sequence
@@ -738,8 +729,9 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
             (this.body as Phaser.Physics.Arcade.Body).setEnable(true);
             
             if (this.phase === 1) {
+                this.bossState = 'idle';
                 this.flyTarget = undefined;
-                this.queueNextThunderSequence();
+                this.nextAttackTimer = 3000;
             } else if (this.phase === 2) {
                 this.startGroundedPatrol();
             }
@@ -749,23 +741,13 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
     private transitionToPhase2() {
         this.phase = 2;
         this.isInvulnerable = false;
+        this.phase2ThunderTimer = 15000;
         
         // Show health bar
         this.uiManager.showFloatingText(this.x, this.y - 40, 'PHASE 2 - VULNERABLE', '#FF0000');
         
         // Descend to ground
         this.startGroundedPatrol();
-        
-        // Start ground thunder loop
-        this.scene.time.addEvent({
-            delay: 15000, // 15 seconds
-            loop: true,
-            callback: () => {
-                if (this.phase === 2 && this.bossState === 'patrolling') {
-                    this.playThunderTelegraph();
-                }
-            }
-        });
 
         // Start shooting Orbs of Rage
         this.scene.time.addEvent({
@@ -972,7 +954,7 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
         });
     }
 
-    public update(_time: number, _delta: number) {
+    public update(_time: number, delta: number) {
         if (this.isDead) return;
 
         // Frozen until player crosses BossFightEntrance or enters the arena
@@ -1021,6 +1003,21 @@ export class EleckingBoss extends Phaser.Physics.Arcade.Sprite {
                 if (cBody) cBody.setVelocity(0, 0);
             });
             return;
+        }
+
+        // Handle boss attack timers
+        if (this.phase === 1 && this.bossState === 'idle') {
+            this.nextAttackTimer -= delta;
+            if (this.nextAttackTimer <= 0) {
+                this.nextAttackTimer = 3000;
+                this.playThunderTelegraph();
+            }
+        } else if (this.phase === 2 && this.bossState === 'patrolling') {
+            this.phase2ThunderTimer -= delta;
+            if (this.phase2ThunderTimer <= 0) {
+                this.phase2ThunderTimer = 15000;
+                this.playThunderTelegraph();
+            }
         }
 
         // When inside arena:

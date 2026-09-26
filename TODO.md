@@ -68,7 +68,7 @@
 - [ ] **2. All Orbs Assets & Mechanics**: Integrate dedicated sprites & logic for all boss fight orbs (Gravity Orbs, Orbs of Rage, and Orb of Victory).
 - [ ] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
 - [ ] **4. New Checkpoint Asset**: Replace/upgrade the checkpoint banner and visual pole/flag assets.
-- [ ] **5. Bridge Smash Ground Asset**: Add bridge sprite as the new destructible / smash ground asset.
+- [x] **5. Bridge Smash Ground Asset**: Add bridge sprite as the new destructible / smash ground asset with 4-frame break animation and uninterrupted smash mechanics.
 - [x] **6. New Jump Pad Asset & Mechanics**: Add spring / jump pad asset with physics bounce trajectory, 4-frame left-to-right animation, and pixel-accurate 8px bottom hitbox.
 - [ ] **7. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
 - [ ] **8. New Bullet Sprite**: Upgrade the blaster projectile sprite and impact animations.

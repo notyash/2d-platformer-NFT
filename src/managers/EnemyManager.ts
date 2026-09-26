@@ -571,6 +571,7 @@ export class EnemyManager {
             mob.setData('rangeDown', rangeDown);
             mob.setData('direction', initialDir);
             mob.setData('speed', mobSpeed); 
+            mob.setData('followSpeed', mobSpeed > 0 ? mobSpeed : 55);
             mob.setData('stationary', isStationary);
             mob.setData('type', normalizedType); 
             mob.setData('canShoot', canShoot);
@@ -1094,6 +1095,18 @@ export class EnemyManager {
     }
 
     private isPlayerInsideOrBehindSmashGround(): boolean {
+        if (this.envManager && this.envManager.bridges) {
+            for (const bridge of this.envManager.bridges) {
+                if (!bridge.broken && bridge.sprite && bridge.sprite.active) {
+                    const bBounds = bridge.sprite.getBounds();
+                    if (this.player && this.player.body) {
+                        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+                        const pRect = new Phaser.Geom.Rectangle(pBody.x, pBody.y, pBody.width, pBody.height);
+                        if (Phaser.Geom.Intersects.RectangleToRectangle(pRect, bBounds)) return true;
+                    }
+                }
+            }
+        }
         if (!this.smashLayer || !this.player || !this.player.body) return false;
         const pBody = this.player.body as Phaser.Physics.Arcade.Body;
         const centerTile = this.smashLayer.getTileAtWorldXY(pBody.center.x, pBody.center.y);
@@ -1113,9 +1126,20 @@ export class EnemyManager {
         // If player is standing inside / within smash ground blocks, block all detection
         if (this.isPlayerInsideOrBehindSmashGround()) return false;
 
-        if (!this.groundLayer && !this.smashLayer) return true;
-        
         this.losLine.setTo(mobX, mobY, targetX, targetY);
+
+        if (this.envManager && this.envManager.bridges) {
+            for (const bridge of this.envManager.bridges) {
+                if (!bridge.broken && bridge.sprite && bridge.sprite.active) {
+                    const bBounds = bridge.sprite.getBounds();
+                    if (Phaser.Geom.Intersects.LineToRectangle(this.losLine, bBounds)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (!this.groundLayer && !this.smashLayer) return true;
         
         if (this.groundLayer) {
             const tiles = this.groundLayer.getTilesWithinShape(this.losLine);
@@ -1161,12 +1185,28 @@ export class EnemyManager {
         const mobType = (mob.getData('type') as string) || '';
         const isStationary = mob.getData('stationary') as boolean;
         const speed = (mob.getData('speed') as number) || 0;
-
-        if (isStationary || speed === 0) {
-            mob.setData('direction', aimDir);
+        mob.setData('direction', aimDir);
+        if (mobType === 'lava-kappa' || mobType === 'kappa') {
+            if (isStationary || speed === 0) {
+                if (mob.anims.isPlaying) mob.anims.stop();
+                mob.setTexture('mob-lava-kappa', aimDir === 1 ? 4 : 0);
+            } else {
+                const animKey = this.getMobAnimKey(mobType, aimDir);
+                if (this.scene.anims.exists(animKey)) {
+                    mob.play(animKey, true);
+                } else {
+                    mob.setTexture('mob-lava-kappa', aimDir === 1 ? 4 : 0);
+                }
+            }
+        } else if (isStationary || speed === 0) {
             const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
             if (mob.anims.isPlaying) mob.anims.stop();
             mob.setTexture(texInfo.key, texInfo.frame);
+        } else {
+            const animKey = this.getMobAnimKey(mobType, aimDir);
+            if (this.scene.anims.exists(animKey)) {
+                mob.play(animKey, true);
+            }
         }
         if (mobType === 'shiro-onna') {
             mob.setFlipX(aimDir === -1);
@@ -1319,7 +1359,8 @@ export class EnemyManager {
                 const gTile = groundLayer.getTileAtWorldXY(testX, testY);
                 const owTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(testX, testY) : null;
                 const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(testX, testY) : null;
-                const hasSolidFloor = (gTile && gTile.index !== -1) || (owTile && owTile.index !== -1) || (smashTile && smashTile.index !== -1);
+                const bridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(testX, testY)) : false;
+                const hasSolidFloor = (gTile && gTile.index !== -1) || (owTile && owTile.index !== -1) || (smashTile && smashTile.index !== -1) || bridgeFloor;
 
                 if (!hasSolidFloor) continue;
 
@@ -1485,6 +1526,7 @@ export class EnemyManager {
             const mobType = mob.getData('type') as string;
             const canShoot = mob.getData('canShoot') as boolean;
             const ignoreLOS = (mob.getData('ignoreLOS') as boolean) || false;
+            const allowOneWay = (mob.getData('allowOneWay') as boolean) ?? true;
             const body = mob.body as Phaser.Physics.Arcade.Body;
 
             if (mobType === 'shiro-onna') {
@@ -1525,6 +1567,162 @@ export class EnemyManager {
                 } else if (isNearCamera) {
                     mob.setFlipX(this.player.x < mob.x);
                     this.tryTeleportShiroOnna(mob, currentTime, groundLayer, oneWayLayer);
+                }
+            } else if (mobType === 'lava-kappa' || mobType === 'kappa') {
+                if (!isNearCamera) {
+                    mob.setVelocityX(0);
+                    if (mob.anims.isPlaying) {
+                        mob.anims.stop();
+                    }
+                } else {
+                    const distToPlayer = Phaser.Math.Distance.Between(mob.x, mob.y, this.player.x, this.player.y);
+                    const range = (mob.getData('range') as number) || 380;
+                    const inRange = distToPlayer <= range;
+
+                    if (isStationary || speed === 0) {
+                        // Standstill / Stationary Lava Kappa
+                        mob.setVelocityX(0);
+                        if (mob.anims.isPlaying) {
+                            mob.anims.stop();
+                        }
+                        if (inRange) {
+                            // Turn to face the player's direction
+                            const aimDir = this.player.x < mob.x ? -1 : 1;
+                            dir = aimDir;
+                            mob.setData('direction', dir);
+                        }
+                        mob.setTexture('mob-lava-kappa', dir === 1 ? 4 : 0);
+                    } else if (inRange) {
+                        // Non-stationary Lava Kappa: Follow player when in range
+                        const aimDir = this.player.x < mob.x ? -1 : 1;
+                        dir = aimDir;
+                        mob.setData('direction', dir);
+
+                        const distX = Math.abs(this.player.x - mob.x);
+                        let shouldMove = distX > 16;
+                        let moved = false;
+
+                        if (shouldMove) {
+                            const lookaheadDist = Math.max(6, Math.ceil(speed * 0.06));
+                            const checkX = dir === 1 ? body.right + lookaheadDist : body.left - lookaheadDist;
+                            const checkY = body.bottom + 6;
+
+                            const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
+                            const oneWayTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(checkX, checkY) : null;
+                            const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
+                            const bridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(checkX, checkY)) : false;
+                            const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1) || bridgeFloor;
+
+                            let isFloorHazard = false;
+                            let isWallHazard = false;
+                            if (this.hazardsLayer) {
+                                const hFloorTile = this.hazardsLayer.getTileAtWorldXY(checkX, checkY);
+                                if (hFloorTile && hFloorTile.index !== -1) isFloorHazard = true;
+
+                                const hWallTile = this.hazardsLayer.getTileAtWorldXY(checkX, body.center.y);
+                                if (hWallTile && hWallTile.index !== -1) isWallHazard = true;
+                            }
+
+                            const isBlockedByWall = (dir === 1 && (body.blocked.right || body.touching.right)) ||
+                                                    (dir === -1 && (body.blocked.left || body.touching.left));
+
+                            if (!hasFloor || isFloorHazard || isWallHazard || isBlockedByWall) {
+                                mob.setVelocityX(0);
+                            } else {
+                                mob.setVelocityX(speed * dir);
+                                moved = true;
+                            }
+                        } else {
+                            mob.setVelocityX(0);
+                        }
+
+                        if (moved) {
+                            const animKey = this.getMobAnimKey(mobType, dir);
+                            if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                                mob.play(animKey, true);
+                            }
+                        } else {
+                            if (mob.anims.isPlaying) {
+                                mob.anims.stop();
+                            }
+                            mob.setTexture('mob-lava-kappa', dir === 1 ? 4 : 0);
+                        }
+                    } else {
+                        // Non-stationary Lava Kappa: Moving patrol mob logic if out of agro range
+                        const lastTurnTime = (mob.getData('lastTurnTime') as number) || 0;
+                        const canTurn = (currentTime - lastTurnTime > 150);
+
+                        const spawnX = (mob.getData('spawnX') as number) ?? mob.x;
+                        const rangeLeft = mob.getData('rangeLeft') as number | undefined;
+                        const rangeRight = mob.getData('rangeRight') as number | undefined;
+
+                        if (canTurn && dir === -1 && rangeLeft !== undefined && (spawnX - mob.x) >= rangeLeft) {
+                            dir = 1;
+                            mob.setData('lastTurnTime', currentTime);
+                        } else if (canTurn && dir === 1 && rangeRight !== undefined && (mob.x - spawnX) >= rangeRight) {
+                            dir = -1;
+                            mob.setData('lastTurnTime', currentTime);
+                        }
+
+                        if (body.blocked.left && body.blocked.right) {
+                            mob.setVelocityX(0);
+                        } else if (body.blocked.left || body.touching.left) {
+                            if (canTurn && dir !== 1) {
+                                dir = 1;
+                                mob.setData('lastTurnTime', currentTime);
+                            }
+                        } else if (body.blocked.right || body.touching.right) {
+                            if (canTurn && dir !== -1) {
+                                dir = -1;
+                                mob.setData('lastTurnTime', currentTime);
+                            }
+                        } else {
+                            const lookaheadDist = Math.max(6, Math.ceil(speed * 0.06));
+                            const checkX = dir === 1 ? body.right + lookaheadDist : body.left - lookaheadDist;
+                            const checkY = body.bottom + 6;
+                            
+                            const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
+                            const oneWayTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(checkX, checkY) : null;
+                            const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
+                            const bridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(checkX, checkY)) : false;
+                            const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1) || bridgeFloor;
+                            
+                            let isFloorHazard = false;
+                            let isWallHazard = false;
+                            if (this.hazardsLayer) {
+                                const hFloorTile = this.hazardsLayer.getTileAtWorldXY(checkX, checkY);
+                                if (hFloorTile && hFloorTile.index !== -1) isFloorHazard = true;
+
+                                const hWallTile = this.hazardsLayer.getTileAtWorldXY(checkX, body.center.y);
+                                if (hWallTile && hWallTile.index !== -1) isWallHazard = true;
+                            }
+
+                            if (!hasFloor || isFloorHazard || isWallHazard) {
+                                const oppCheckX = dir === 1 ? body.left - lookaheadDist : body.right + lookaheadDist;
+                                const oppTile = groundLayer.getTileAtWorldXY(oppCheckX, checkY);
+                                const oppOneWay = allowOneWay ? oneWayLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
+                                const oppSmash = this.smashLayer ? this.smashLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
+                                const oppBridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(oppCheckX, checkY)) : false;
+                                const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1) || oppBridgeFloor;
+
+                                if (!oppHasFloor) {
+                                    mob.setVelocityX(0);
+                                } else if (canTurn) {
+                                    dir *= -1;
+                                    mob.setData('direction', dir);
+                                    mob.setData('lastTurnTime', currentTime);
+                                }
+                            }
+                        }
+
+                        mob.setData('direction', dir);
+                        mob.setVelocityX(speed * dir);
+
+                        const animKey = this.getMobAnimKey(mobType, dir);
+                        if ((!mob.anims.isPlaying || mob.anims.currentAnim?.key !== animKey) && this.scene.anims.exists(animKey)) {
+                            mob.play(animKey, true);
+                        }
+                    }
                 }
             } else if (isStationary || speed === 0) {
                 mob.setVelocityX(0);
@@ -1634,9 +1832,10 @@ export class EnemyManager {
                         const checkY = body.bottom + 6;
                         
                         const tile = groundLayer.getTileAtWorldXY(checkX, checkY);
-                        const oneWayTile = oneWayLayer.getTileAtWorldXY(checkX, checkY);
+                        const oneWayTile = allowOneWay ? oneWayLayer.getTileAtWorldXY(checkX, checkY) : null;
                         const smashTile = this.smashLayer ? this.smashLayer.getTileAtWorldXY(checkX, checkY) : null;
-                        const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1);
+                        const bridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(checkX, checkY)) : false;
+                        const hasFloor = (tile && tile.index !== -1) || (oneWayTile && oneWayTile.index !== -1) || (smashTile && smashTile.index !== -1) || bridgeFloor;
                         
                         // Check if floor or body height ahead contains a hazard tile
                         let isFloorHazard = false;
@@ -1653,9 +1852,10 @@ export class EnemyManager {
                             // Check opposite side floor to detect isolated 1-tile ledges
                             const oppCheckX = dir === 1 ? body.left - lookaheadDist : body.right + lookaheadDist;
                             const oppTile = groundLayer.getTileAtWorldXY(oppCheckX, checkY);
-                            const oppOneWay = oneWayLayer.getTileAtWorldXY(oppCheckX, checkY);
+                            const oppOneWay = allowOneWay ? oneWayLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
                             const oppSmash = this.smashLayer ? this.smashLayer.getTileAtWorldXY(oppCheckX, checkY) : null;
-                            const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1);
+                            const oppBridgeFloor = this.envManager?.bridges ? this.envManager.bridges.some(b => !b.broken && b.sprite.active && b.sprite.getBounds().contains(oppCheckX, checkY)) : false;
+                            const oppHasFloor = (oppTile && oppTile.index !== -1) || (oppOneWay && oppOneWay.index !== -1) || (oppSmash && oppSmash.index !== -1) || oppBridgeFloor;
 
                             if (!oppHasFloor) {
                                 mob.setVelocityX(0);
@@ -1697,14 +1897,30 @@ export class EnemyManager {
                         mob.setData('lastShootTime', currentTime);
                         
                         const aimDir = this.player.x < mob.x ? -1 : 1;
-                        if (isStationary || speed === 0) {
-                            mob.setData('direction', aimDir);
+                        mob.setData('direction', aimDir);
+                        
+                        if (mobType === 'lava-kappa' || mobType === 'kappa') {
+                            if (isStationary || speed === 0) {
+                                if (mob.anims.isPlaying) mob.anims.stop();
+                                mob.setTexture('mob-lava-kappa', aimDir === 1 ? 4 : 0);
+                            } else {
+                                const animKey = this.getMobAnimKey(mobType, aimDir);
+                                if (this.scene.anims.exists(animKey)) {
+                                    mob.play(animKey, true);
+                                } else {
+                                    mob.setTexture('mob-lava-kappa', aimDir === 1 ? 4 : 0);
+                                }
+                            }
+                        } else if (isStationary || speed === 0) {
                             const texInfo = this.getMobTextureAndFrame(mobType, aimDir);
                             if (mob.anims.isPlaying) mob.anims.stop();
                             mob.setTexture(texInfo.key, texInfo.frame);
                         } else {
-                            // Moving patrol mobs fire towards player without breaking patrol ledge safety
                             mob.setData('lastAimDir', aimDir);
+                            const animKey = this.getMobAnimKey(mobType, aimDir);
+                            if (this.scene.anims.exists(animKey)) {
+                                mob.play(animKey, true);
+                            }
                         }
                         if (mobType === 'shiro-onna') {
                             mob.setFlipX(aimDir === -1);
@@ -1718,6 +1934,21 @@ export class EnemyManager {
                             repeat: 1,
                             onComplete: () => {
                                 if (mob.active) {
+                                    const currentAimDir = this.player.x < mob.x ? -1 : 1;
+                                    mob.setData('direction', currentAimDir);
+                                    if (mobType === 'lava-kappa' || mobType === 'kappa') {
+                                        if (isStationary || speed === 0) {
+                                            if (mob.anims.isPlaying) mob.anims.stop();
+                                            mob.setTexture('mob-lava-kappa', currentAimDir === 1 ? 4 : 0);
+                                        } else {
+                                            const animKey = this.getMobAnimKey(mobType, currentAimDir);
+                                            if (this.scene.anims.exists(animKey)) {
+                                                mob.play(animKey, true);
+                                            } else {
+                                                mob.setTexture('mob-lava-kappa', currentAimDir === 1 ? 4 : 0);
+                                            }
+                                        }
+                                    }
                                     this.fireEnemyProjectile(mob, playerZone, ignoreLOS);
                                 }
                             }

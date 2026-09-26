@@ -77,6 +77,7 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('misc/spike', 'assets/sprites/misc/spike.png');
         this.load.image('blocks/spike', 'assets/sprites/blocks/spike.png');
         this.load.spritesheet('jump-pad-img', 'assets/sprites/misc/jumppad sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('bridge-break', 'assets/sprites/misc/new bridge break sprite.png', { frameWidth: 96, frameHeight: 32 });
         this.load.spritesheet('coin', 'assets/sprites/collectibles/new coin sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
         this.load.spritesheet('firebar-sprite', 'assets/sprites/misc/firebar sprite.png', { frameWidth: 32, frameHeight: 64 });
@@ -250,6 +251,7 @@ export class MainStageScene extends Phaser.Scene {
         this.envManager.setupJumpPads(map, rawMapObjects);
         this.envManager.setupFirebars(rawMapObjects);
         this.envManager.setupSmashTriggers(map);
+        this.envManager.setupBridges(map, rawMapObjects);
         this.envManager.setupDandelions(rawMapObjects);
         this.envManager.setupStartTutorialCues(rawMapObjects, spawnX, spawnY);
 
@@ -286,6 +288,11 @@ export class MainStageScene extends Phaser.Scene {
         }
         if (this.envManager.movingPlatforms.length > 0) {
             this.physics.add.collider(this.enemyManager.groundMobs, this.envManager.movingPlatforms);
+        }
+        if (this.envManager.bridges.length > 0) {
+            this.envManager.bridges.forEach(b => {
+                this.physics.add.collider(this.enemyManager.groundMobs, b.sprite, undefined, () => !b.broken);
+            });
         }
         
         this.collectiblesManager.setupCollectibles(map);
@@ -902,6 +909,14 @@ export class MainStageScene extends Phaser.Scene {
             key: 'jumppad-spring',
             frames: this.anims.generateFrameNumbers('jump-pad-img', { start: 0, end: 3 }),
             frameRate: 16,
+            repeat: 0
+        });
+
+        // Bridge break shattering animation (4 frames: 0 -> 1 -> 2 -> 3)
+        this.anims.create({
+            key: 'bridge-break-anim',
+            frames: this.anims.generateFrameNumbers('bridge-break', { start: 0, end: 3 }),
+            frameRate: 6,
             repeat: 0
         });
     }

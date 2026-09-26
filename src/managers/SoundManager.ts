@@ -108,6 +108,14 @@ export class SoundManager {
         this.playTone(400, 90, 'sawtooth', 0.4, 0.35);
     }
 
+    public playBridgeBreak() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        this.playTone(160, 45, 'sawtooth', 0.25, 0.35);
+        this.scene.time.delayedCall(40, () => this.playTone(280, 70, 'square', 0.2, 0.28));
+        this.scene.time.delayedCall(90, () => this.playTone(120, 30, 'sawtooth', 0.3, 0.35));
+    }
+
     public playMenuSelect() {
         if (this.isMuted) return;
         this.ensureContext();
