@@ -342,12 +342,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             this.isInvincible = true;
             this.setPosition(this.lastSafeX, this.lastSafeY); 
             this.setVelocity(0, 0); 
-            this.setTint(0xffaa00); 
+            this.clearTint();
             this.soundManager?.playDeath();
             this.enforceKeyLift();
-            this.scene.time.delayedCall(3000, () => {
-                this.isInvincible = false;
-                this.clearTint();
+            
+            // Clean invincibility alpha flicker (no colored screen or sprite tint)
+            this.scene.tweens.add({
+                targets: this,
+                alpha: 0.35,
+                duration: 100,
+                yoyo: true,
+                repeat: 14,
+                onComplete: () => {
+                    this.alpha = 1;
+                    this.isInvincible = false;
+                    this.clearTint();
+                }
             });
             return;
         }

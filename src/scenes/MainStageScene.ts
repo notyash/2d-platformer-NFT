@@ -125,7 +125,8 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('lava-death-r', 'assets/sprites/effects/lava death sprite-r.png', { frameWidth: 32, frameHeight: 32 });
 
         // Boss Sprites
-        this.load.spritesheet('elecking-power', 'assets/sprites/boss/Elecking Power Attack Sprite.png', { frameWidth: 64, frameHeight: 64 });
+        this.load.spritesheet('elecking-power', 'assets/sprites/boss/Elecking Power Attack Sprite 96.png', { frameWidth: 96, frameHeight: 96 });
+        this.load.spritesheet('elecking-powerup', 'assets/sprites/boss/Elecking Powerup 96.png', { frameWidth: 96, frameHeight: 96 });
         this.load.spritesheet('temp-platforms', 'assets/sprites/boss/temp platforms.png', { frameWidth: 64, frameHeight: 32 });
         this.load.spritesheet('cloud-thunder-attack', 'assets/sprites/boss/cloud thunder attack.png', { frameWidth: 32, frameHeight: 240 });
         this.load.spritesheet('attack-orb', 'assets/sprites/boss/attack orb.png', { frameWidth: 32, frameHeight: 32 });
@@ -308,10 +309,15 @@ export class MainStageScene extends Phaser.Scene {
             this.totalDeaths++;
             SecurityManager.getInstance().recordDeath(this.totalDeaths);
             SecurityManager.getInstance().recordEvent('DEATH', { x: this.player.x, y: this.player.y, deaths: this.totalDeaths });
-            this.collectiblesManager.rollbackToCheckpoint();
-            this.enemyManager.rollbackToCheckpoint();
-            this.inventoryManager.rollbackToCheckpoint();
-            this.envManager.rollbackToCheckpoint();
+            
+            const isInsideBossArena = Boolean(this.eleckingBoss?.isPlayerInArena());
+            if (!isInsideBossArena) {
+                this.collectiblesManager.rollbackToCheckpoint();
+                this.enemyManager.rollbackToCheckpoint();
+                this.inventoryManager.rollbackToCheckpoint();
+                this.envManager.rollbackToCheckpoint();
+                this.eleckingBoss?.resetAll();
+            }
             this.player.bullets.clear(true, true);
         });
 
@@ -503,7 +509,10 @@ export class MainStageScene extends Phaser.Scene {
         if (this.isGamePaused) return;
         this.isGamePaused = true;
         this.physics.pause();
-        this.player.anims.pause();
+        this.anims.pauseAll();
+        this.tweens.pauseAll();
+        this.time.paused = true;
+        this.soundManager.pauseAll();
         this.soundManager.playMenuSelect();
 
         const formattedTime = this.getFormattedElapsedTime();
@@ -527,7 +536,10 @@ export class MainStageScene extends Phaser.Scene {
         if (!this.isGamePaused) return;
         this.isGamePaused = false;
         this.physics.resume();
-        this.player.anims.resume();
+        this.anims.resumeAll();
+        this.tweens.resumeAll();
+        this.time.paused = false;
+        this.soundManager.resumeAll();
         this.uiManager.hidePauseMenu();
         this.soundManager.playMenuSelect();
     }
@@ -555,6 +567,7 @@ export class MainStageScene extends Phaser.Scene {
         this.enemyManager.rollbackToCheckpoint();
         this.inventoryManager.rollbackToCheckpoint();
         this.envManager.rollbackToCheckpoint();
+        this.eleckingBoss?.resetAll();
         this.player.bullets.clear(true, true);
 
         this.uiManager.showFloatingText(this.player.x, this.player.y - 20, 'RESPAWNED AT CHECKPOINT', '#38BDF8', 1200);
@@ -591,6 +604,7 @@ export class MainStageScene extends Phaser.Scene {
         this.inventoryManager.resetAll();
         this.envManager.resetAll();
         this.envManager.resetCheckpoints();
+        this.eleckingBoss?.resetAll();
         SecurityManager.getInstance().startNewRun('stage1');
         InputRecorder.getInstance().reset();
         SurrealService.getInstance().startRun();

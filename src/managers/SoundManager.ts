@@ -111,7 +111,7 @@ export class SoundManager {
     public playMenuSelect() {
         if (this.isMuted) return;
         this.ensureContext();
-        this.playTone(520, 680, 'sine', 0.05, 0.18);
+        this.playTone(520, 680, 'sine', 0.05, 0.18, true);
     }
 
     public playCheckpoint() {
@@ -126,6 +126,26 @@ export class SoundManager {
         this.playTone(200, 850, 'triangle', 0.25, 0.22);
     }
 
+    public pauseAll() {
+        if (this.ctx && this.ctx.state === 'running') {
+            this.ctx.suspend();
+        }
+        if (this.scene.sound) {
+            this.scene.sound.pauseAll();
+        }
+    }
+
+    public resumeAll() {
+        if (!this.isMuted) {
+            if (this.ctx && this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+            if (this.scene.sound) {
+                this.scene.sound.resumeAll();
+            }
+        }
+    }
+
     public playBossMusic() {
         if (this.isMuted) return;
         this.ensureContext();
@@ -136,7 +156,7 @@ export class SoundManager {
         const notes = [220.00, 261.63, 329.63, 293.66, 349.23, 293.66, 261.63, 220.00];
         
         this.musicInterval = setInterval(() => {
-            if (this.isMuted) return;
+            if (this.isMuted || (this.scene as any).isGamePaused) return;
             const freq = notes[step % notes.length];
             // Bass thump
             if (step % 2 === 0) {
@@ -155,9 +175,10 @@ export class SoundManager {
         }
     }
 
-    private playTone(startFreq: number, endFreq: number, type: OscillatorType, duration: number, volume: number) {
+    private playTone(startFreq: number, endFreq: number, type: OscillatorType, duration: number, volume: number, isMenu: boolean = false) {
         try {
             if (!this.ctx) return;
+            if (!isMenu && (this.scene as any).isGamePaused) return;
             const effectiveVol = volume * this.settingsManager.getEffectiveSfxVolume();
             if (effectiveVol <= 0.001) return;
 
