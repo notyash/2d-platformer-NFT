@@ -1,0 +1,2 @@
+public/assets/sprites/misc/new bullet sprite.png -> {"w":64,"h":64}
+public/assets/sprites/misc/checkpoint sprite.png -> {"w":32,"h":32}

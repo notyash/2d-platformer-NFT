@@ -42,6 +42,7 @@ export interface CheckpointData {
     spawnY: number;
     label: string;
     activated: boolean;
+    sprite?: Phaser.GameObjects.Sprite;
 }
 
 export interface BridgeData {
@@ -75,11 +76,13 @@ export class EnvironmentManager {
     public revealTriggers: RevealTriggerData[] = [];
     public revealTileLayers: RevealTileLayerData[] = [];
     public checkpoints: CheckpointData[] = [];
+    public checkpointSprites: Phaser.GameObjects.Sprite[] = [];
     public dandelions: Phaser.GameObjects.Sprite[] = [];
 
     public doorExitX: number = 0;
     public doorExitY: number = 0;
     public doorPrompts: Phaser.GameObjects.Container[] = [];
+    public doorSprites: Phaser.GameObjects.Sprite[] = [];
 
     constructor(
         scene: Phaser.Scene, 
@@ -97,6 +100,19 @@ export class EnvironmentManager {
 
     public hasActiveCheckpoint(): boolean {
         return this.checkpoints.some(cp => cp.activated);
+    }
+
+    public isPlayerTouchingBridge(): boolean {
+        if (!this.player || !this.player.active) return false;
+        const pBounds = this.player.getBounds();
+        for (const bridge of this.bridges) {
+            if (!bridge.broken && bridge.sprite && bridge.sprite.active) {
+                if (Phaser.Geom.Intersects.RectangleToRectangle(pBounds, bridge.sprite.getBounds())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public isPlayerInCheckpointZone(): boolean {
@@ -157,18 +173,29 @@ export class EnvironmentManager {
 
     setupCheckpoints(rawMapObjects: any[]) {
         this.checkpoints = [];
+        this.checkpointSprites.forEach(s => s.destroy());
+        this.checkpointSprites = [];
 
-        // 1. Gather all spawn point locations from Tiled
-        const spawnPoints: { [key: string]: { x: number, y: number } } = {};
+        // 1. Gather all spawn point locations from Tiled and place checkpoint sprites on the ground
+        const spawnPoints: { [key: string]: { x: number, y: number, sprite?: Phaser.GameObjects.Sprite } } = {};
         
         rawMapObjects.forEach((obj: any) => {
             const cleanName = String(obj.name || '').trim().toLowerCase().replace(/\s+/g, '');
-            const posX = obj.x + (obj.width ? obj.width / 2 : 0);
-            const posY = obj.y + (obj.height ? obj.height : 0);
+            const posX = obj.x + (obj.width ? obj.width / 2 : 16);
+            const posY = obj.y + (obj.height ? obj.height : 32);
 
             if (/^(checkpoint|cp)\d*(spawn)?$/i.test(cleanName)) {
-                spawnPoints[cleanName] = { x: posX, y: posY };
-                spawnPoints[cleanName.replace('spawn', '')] = { x: posX, y: posY };
+                let cpSprite: Phaser.GameObjects.Sprite | undefined;
+                if (this.scene.textures.exists('checkpoint-sprite')) {
+                    cpSprite = this.scene.add.sprite(posX, posY, 'checkpoint-sprite');
+                    cpSprite.setOrigin(0.5, 1.0);
+                    cpSprite.setDepth(2.8);
+                    cpSprite.setVisible(false);
+                    this.checkpointSprites.push(cpSprite);
+                }
+
+                spawnPoints[cleanName] = { x: posX, y: posY, sprite: cpSprite };
+                spawnPoints[cleanName.replace('spawn', '')] = { x: posX, y: posY, sprite: cpSprite };
             }
         });
 
@@ -231,7 +258,8 @@ export class EnvironmentManager {
                     spawnX: sX,
                     spawnY: sY,
                     label,
-                    activated: false
+                    activated: false,
+                    sprite: matchedSpawn?.sprite
                 });
             }
         });
@@ -461,6 +489,9 @@ export class EnvironmentManager {
 
     setupDoors(rawMapObjects: any[]) {
         this.doorExitZones = [];
+        this.doorSprites.forEach(s => s.destroy());
+        this.doorSprites = [];
+
         const exitObject = rawMapObjects.find((obj: any) => obj.name === 'DoorExit');
         if (exitObject) {
             this.doorExitX = exitObject.x + (exitObject.width ? exitObject.width / 2 : 0);
@@ -473,6 +504,15 @@ export class EnvironmentManager {
             const exitZone = this.scene.add.zone(eX, eY, eW, eH);
             this.scene.physics.add.existing(exitZone, true);
             this.doorExitZones.push(exitZone);
+
+            const exitSpriteX = exitObject.x + (exitObject.width ? exitObject.width / 2 : 16);
+            const exitSpriteY = exitObject.gid !== undefined ? exitObject.y : exitObject.y + (exitObject.height || 32);
+            if (this.scene.textures.exists('door')) {
+                const dSprite = this.scene.add.sprite(exitSpriteX, exitSpriteY, 'door');
+                dSprite.setOrigin(0.5, 1.0);
+                dSprite.setDepth(2.5);
+                this.doorSprites.push(dSprite);
+            }
         }
         
         this.doorZones = [];
@@ -488,18 +528,28 @@ export class EnvironmentManager {
             this.scene.physics.add.existing(zone, true); 
             this.doorZones.push(zone);
 
-            // Static "Press E To Enter" badge permanently fixed directly above the teleporter door
+            const doorSpriteX = obj.x + (obj.width ? obj.width / 2 : 16);
+            const doorSpriteY = obj.gid !== undefined ? obj.y : obj.y + (obj.height || 32);
+            if (this.scene.textures.exists('door')) {
+                const dSprite = this.scene.add.sprite(doorSpriteX, doorSpriteY, 'door');
+                dSprite.setOrigin(0.5, 1.0);
+                dSprite.setDepth(2.5);
+                this.doorSprites.push(dSprite);
+            }
+
+            // Static "[ E ]" badge permanently fixed directly above the teleporter door
             const promptX = zX;
-            const promptY = (obj.y || 0) - 14;
+            const topY = obj.gid !== undefined ? (obj.y - (obj.height || 32)) : (obj.y || 0);
+            const promptY = topY - 14;
 
             const bg = this.scene.add.graphics();
             bg.fillStyle(0x0f172a, 0.9);
-            bg.fillRoundedRect(-58, -14, 116, 28, 8);
+            bg.fillRoundedRect(-22, -12, 44, 24, 6);
             bg.lineStyle(1.5, 0x38bdf8, 0.95);
-            bg.strokeRoundedRect(-58, -14, 116, 28, 8);
+            bg.strokeRoundedRect(-22, -12, 44, 24, 6);
 
-            const txt = this.scene.add.text(0, 0, 'Press E To Enter', {
-                fontSize: '12px',
+            const txt = this.scene.add.text(0, 0, '[ E ]', {
+                fontSize: '13px',
                 fontFamily: 'Arial, sans-serif',
                 color: '#f8fafc',
                 fontStyle: 'bold'
@@ -851,9 +901,13 @@ export class EnvironmentManager {
     }
 
     setupSmashTriggers(map: Phaser.Tilemaps.Tilemap) {
+        this.smashTriggers = [];
         const objectLayer = map.getObjectLayer('Objects');
         if (objectLayer) {
-            objectLayer.objects.filter((obj: any) => obj.name === 'SmashTrigger').forEach((obj: any) => {
+            objectLayer.objects.filter((obj: any) => {
+                const name = String(obj.name || '').trim().toLowerCase();
+                return name.includes('smash');
+            }).forEach((obj: any) => {
                 const zone = this.scene.add.zone(obj.x! + (obj.width! / 2), obj.y! + (obj.height! / 2), obj.width!, obj.height!);
                 this.smashTriggers.push(zone);
             });
@@ -919,16 +973,16 @@ export class EnvironmentManager {
                     const pBody = this.player.body as Phaser.Physics.Arcade.Body;
                     const bridgeTop = sprite.y;
 
-                    // Check if player is falling down onto the top surface of the bridge
-                    const isFallingOnTop = pBody.velocity.y > 0 && pBody.bottom <= bridgeTop + 16;
+                    // Check if player is falling down onto / through the bridge
+                    const isFallingDown = pBody.velocity.y > 0 && pBody.bottom >= bridgeTop - 4;
 
-                    if (isFallingOnTop && this.player.canSmash) {
+                    if (isFallingDown && this.player.canSmash) {
                         this.breakBridge(bridgeData);
                         return false; // Break through without collision obstruction
                     }
 
                     // Solid platform when landing or standing on top
-                    return pBody.velocity.y >= 0 && pBody.bottom <= bridgeTop + 16;
+                    return pBody.velocity.y >= 0 && pBody.bottom <= bridgeTop + 24;
                 }
             );
             bridgeData.collider = playerCollider;
@@ -1175,6 +1229,20 @@ export class EnvironmentManager {
                     this.uiManager.spawnParticles(cp.spawnX, cp.spawnY, 0xFFD700);
                     this.soundManager?.playCheckpoint();
 
+                    if (cp.sprite) {
+                        cp.sprite.setVisible(true);
+                        cp.sprite.setAlpha(0);
+                        cp.sprite.setScale(0.5);
+                        this.scene.tweens.add({
+                            targets: cp.sprite,
+                            alpha: 1,
+                            scaleX: 1,
+                            scaleY: 1,
+                            duration: 350,
+                            ease: 'Back.easeOut'
+                        });
+                    }
+
                     // Snapshot collected items and killed mobs up to this checkpoint
                     this.scene.events.emit('checkpoint-saved');
                 }
@@ -1275,8 +1343,11 @@ export class EnvironmentManager {
             if (Phaser.Geom.Intersects.RectangleToRectangle(pRect, zone.getBounds())) touchingTrigger = true;
         });
 
-        if (touchingTrigger) this.player.canSmash = true; 
-        else if (pBody.blocked.down) this.player.canSmash = false; 
+        if (touchingTrigger) {
+            this.player.canSmash = true;
+        } else if (pBody.blocked.down && !this.isPlayerTouchingBridge()) {
+            this.player.canSmash = false;
+        } 
     }
 
     public triggerRevealLayer(targetNameOrId?: string, isBoss: boolean = false) {
@@ -1380,6 +1451,9 @@ export class EnvironmentManager {
     resetCheckpoints() {
         this.checkpoints.forEach(cp => {
             cp.activated = false;
+            if (cp.sprite) {
+                cp.sprite.setVisible(false);
+            }
         });
     }
 }

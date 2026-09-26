@@ -62,8 +62,21 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('plainDungeon', 'assets/sprites/background/plainDungeon.png');
 
         this.load.image('cherry blossom', 'assets/sprites/background/cherry blossom.png');
+        this.load.image('cherry blossom 2', 'assets/sprites/background/cherry blossom 2.png');
+        this.load.image('cherry blossom 3', 'assets/sprites/background/cherry blossom 3.png');
         this.load.image('cherry blossom tree', 'assets/sprites/background/cherry blossom tree.png');
         this.load.image('cherry blossom blocks', 'assets/sprites/blocks/cherry blossom blocks.png');
+        this.load.image('tree 1', 'assets/sprites/background/tree 1.png');
+        this.load.image('tree 2', 'assets/sprites/background/tree 2.png');
+        this.load.image('tree 3', 'assets/sprites/background/tree 3.png');
+        this.load.image('tree 4', 'assets/sprites/background/tree 4.png');
+        this.load.image('japanese building', 'assets/sprites/background/japanese building.png');
+        this.load.image('japanese_building_3', 'assets/sprites/background/japanese_building_3.png');
+        this.load.image('flower bush', 'assets/sprites/background/flower bush.png');
+        this.load.image('grass 1', 'assets/sprites/background/grass 1.png');
+        this.load.image('grass 2', 'assets/sprites/background/grass 2.png');
+        this.load.image('big ahh well', 'assets/sprites/misc/big ahh well.png');
+        this.load.image('obstacles sprite', 'assets/sprites/misc/obstacles sprite.png');
         this.load.image('grass template', 'assets/sprites/blocks/grass template.png');
         this.load.image('cb template', 'assets/sprites/blocks/cb template.png');
         this.load.image('DIRT AND GRASS REMADE', 'assets/sprites/blocks/DIRT AND GRASS REMADE.png');
@@ -89,6 +102,9 @@ export class MainStageScene extends Phaser.Scene {
         this.load.spritesheet('jump-pad-img', 'assets/sprites/misc/jumppad sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.spritesheet('bridge-break', 'assets/sprites/misc/new bridge break sprite.png', { frameWidth: 96, frameHeight: 32 });
         this.load.spritesheet('coin', 'assets/sprites/collectibles/new coin sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.spritesheet('bullet-sprite', 'assets/sprites/misc/new bullet sprite.png', { frameWidth: 32, frameHeight: 32 });
+        this.load.image('checkpoint-sprite', 'assets/sprites/misc/checkpoint sprite.png');
+        this.load.image('door', 'assets/sprites/misc/door.png');
         this.load.spritesheet('fire-bullets', 'assets/sprites/All_Fire_Bullet_Pixel_16x16_04.png', { frameWidth: 16, frameHeight: 16 });
         this.load.spritesheet('firebar-sprite', 'assets/sprites/misc/firebar sprite.png', { frameWidth: 32, frameHeight: 64 });
         this.load.spritesheet('enemy-fireball', 'assets/sprites/misc/fireball sprite.png', { frameWidth: 32, frameHeight: 32 });
@@ -113,11 +129,13 @@ export class MainStageScene extends Phaser.Scene {
         const fireballSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23FF4500"/><circle cx="8" cy="8" r="5" fill="%23FF8C00"/><circle cx="8" cy="8" r="3" fill="%23FFFF00"/></svg>`;
         const enemyBulletSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" fill="%23DC2626"/><circle cx="8" cy="8" r="5" fill="%23F87171"/><circle cx="8" cy="8" r="2.5" fill="%23FFFFFF"/></svg>`;
         const windParticleSvg = `data:image/svg+xml;charset=utf8,<svg width="16" height="6" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="1" width="16" height="4" rx="2" fill="%23BAE6FD"/></svg>`;
+        const cherryPetalSvg = `data:image/svg+xml;charset=utf8,<svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><path d="M5,0 C7,2 9,4 7,8 C5,10 4,9 3,7 C2,5 3,2 5,0 Z" fill="%23F472B6" fill-opacity="0.85"/></svg>`;
 
         this.load.image('particle', particleSvg);
         this.load.image('fireball', fireballSvg);
         this.load.image('enemy-bullet', enemyBulletSvg);
         this.load.image('wind-particle', windParticleSvg);
+        this.load.image('cherry-petal', cherryPetalSvg);
 
         // Player Sprites
         this.load.image('idle-r', 'assets/sprites/player/Player-Standing-R.png');
@@ -202,6 +220,7 @@ export class MainStageScene extends Phaser.Scene {
 
         const map = this.make.tilemap({ key: 'stage1' });
         this.createLayers(map);
+        this.createAmbientAtmosphere();
         this.createAnimations();
 
         // Enforce clean nearest-neighbor pixel sampling on all textures to prevent edge bleeding
@@ -501,6 +520,9 @@ export class MainStageScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
         this.physics.world.TILE_BIAS = 32;
 
+        // Ambient background cherry blossom petals drifting with the breeze
+        this.createAmbientAtmosphere();
+
         this.game.canvas.setAttribute('tabindex', '0');
         this.game.canvas.focus();
         this.input.on('pointerdown', () => this.game.canvas.focus());
@@ -680,6 +702,19 @@ export class MainStageScene extends Phaser.Scene {
         const plainDungeonTileset = map.addTilesetImage('plainDungeon', 'plainDungeon') || map.addTilesetImage('plain-dungeon', 'plain-dungeon');
         const plainGroundTileset = map.addTilesetImage('plainGround', 'plainGround') || map.addTilesetImage('plain-ground', 'plain-ground');
         const spikeTileset = map.addTilesetImage('spike', 'spike');
+        const japaneseBuildingTileset = map.addTilesetImage('japanese building', 'japanese building');
+        const japaneseBuilding3Tileset = map.addTilesetImage('japanese_building_3', 'japanese_building_3') || map.addTilesetImage('japanese building 3', 'japanese_building_3');
+        const cherryBlossom2Tileset = map.addTilesetImage('cherry blossom 2', 'cherry blossom 2');
+        const cherryBlossom3Tileset = map.addTilesetImage('cherry blossom 3', 'cherry blossom 3');
+        const tree1Tileset = map.addTilesetImage('tree 1', 'tree 1');
+        const tree2Tileset = map.addTilesetImage('tree 2', 'tree 2');
+        const tree3Tileset = map.addTilesetImage('tree 3', 'tree 3');
+        const tree4Tileset = map.addTilesetImage('tree 4', 'tree 4');
+        const flowerBushTileset = map.addTilesetImage('flower bush', 'flower bush');
+        const grass1Tileset = map.addTilesetImage('grass 1', 'grass 1');
+        const grass2Tileset = map.addTilesetImage('grass 2', 'grass 2');
+        const bigWellTileset = map.addTilesetImage('big ahh well', 'big ahh well');
+        const obstaclesTileset = map.addTilesetImage('obstacles sprite', 'obstacles sprite');
 
         const allTilesets = [
             levelObjectsTileset,
@@ -691,8 +726,21 @@ export class MainStageScene extends Phaser.Scene {
             largeTreeTileset,
             grassTileset,
             cherryBlossomTileset,
+            cherryBlossom2Tileset,
+            cherryBlossom3Tileset,
             cherryBlossomTreeTileset,
             cherryBlossomBlocksTileset,
+            japaneseBuildingTileset,
+            japaneseBuilding3Tileset,
+            tree1Tileset,
+            tree2Tileset,
+            tree3Tileset,
+            tree4Tileset,
+            flowerBushTileset,
+            grass1Tileset,
+            grass2Tileset,
+            bigWellTileset,
+            obstaclesTileset,
             grassTemplateTileset,
             cbTemplateTileset,
             dirtAndGrassRemadeTileset,
@@ -933,12 +981,41 @@ export class MainStageScene extends Phaser.Scene {
             }
         }
 
-        // 3. Sensible defaults if not explicitly set in Tiled
-        if (name === 'mountain') {
-            return { x: sx ?? 0.3, y: sy ?? 1 };
+        // Explicit Tiled properties take priority
+        if (sx !== undefined || sy !== undefined) {
+            return { x: sx ?? 1, y: sy ?? 1 };
         }
 
-        return { x: sx ?? 1, y: sy ?? 1 };
+        // 3. Fallbacks: ONLY sky and mountain have parallax
+        if (name === 'sky') {
+            return { x: 0.05, y: 1 };
+        }
+        if (name === 'mountain') {
+            return { x: 0.3, y: 1 };
+        }
+
+        // All other layers (Background, Trees, Ground, SmashGround, etc.) scroll 1:1 with the world
+        return { x: 1, y: 1 };
+    }
+
+    private createAmbientAtmosphere() {
+        if (!this.textures.exists('cherry-petal')) return;
+
+        const petalsEmitter = this.add.particles(0, 0, 'cherry-petal', {
+            x: { min: -100, max: 1200 },
+            y: -20,
+            lifespan: { min: 6000, max: 10000 },
+            speedX: { min: 20, max: 60 },
+            speedY: { min: 25, max: 55 },
+            scale: { start: 0.8, end: 0.35 },
+            alpha: { start: 0.75, end: 0 },
+            rotate: { min: 0, max: 360 },
+            frequency: 450,
+            blendMode: Phaser.BlendModes.NORMAL
+        });
+
+        petalsEmitter.setDepth(2.4);
+        petalsEmitter.setScrollFactor(0);
     }
 
     private applyAtmosphericPerspectiveToMountainTexture() {
@@ -1086,7 +1163,21 @@ export class MainStageScene extends Phaser.Scene {
             repeat: 0
         });
 
-        // Bullet Fire Animation (4-frame spinning flame blast: frames 40-43 in 16x16 grid)
+        // Player Bullet Animations (32x32: Row 1 frames 0..1 Left, Row 2 frames 2..3 Right)
+        this.anims.create({
+            key: 'bullet-left-anim',
+            frames: this.anims.generateFrameNumbers('bullet-sprite', { start: 0, end: 1 }),
+            frameRate: 8,
+            repeat: -1
+        });
+        this.anims.create({
+            key: 'bullet-right-anim',
+            frames: this.anims.generateFrameNumbers('bullet-sprite', { start: 2, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+        });
+
+        // Bullet Fire Animation (fallback)
         this.anims.create({ key: 'fire-bullet-anim', frames: this.anims.generateFrameNumbers('fire-bullets', { start: 40, end: 43 }), frameRate: 14, repeat: -1 });
 
         // Enemy Shooter Fireball (32x32: 0..3 Left, 4..7 Right)

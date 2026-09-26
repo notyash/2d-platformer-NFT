@@ -196,20 +196,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     private shootBullet() {
         const isRight = this.facing === 'right';
         this.shootRecoilUntil = this.scene.time.now + 160;
-        const spawnX = isRight ? this.x + 12 : this.x - 12;
+        const spawnX = isRight ? this.x + 14 : this.x - 14;
         const spawnY = this.y - 2;
 
-        const bullet = this.bullets.create(spawnX, spawnY, 'fire-bullets') as Phaser.Physics.Arcade.Sprite;
+        const bullet = this.bullets.create(spawnX, spawnY, 'bullet-sprite') as Phaser.Physics.Arcade.Sprite;
         bullet.setDepth(5);
         bullet.setOrigin(0.5, 0.5);
-        bullet.setFlipX(!isRight);
 
         const body = bullet.body as Phaser.Physics.Arcade.Body;
-        body.setSize(12, 12);
-        body.setOffset(2, 2);
+        body.setSize(18, 14);
+        body.setOffset(7, 9);
         body.allowGravity = false;
 
-        if (this.scene.anims.exists('fire-bullet-anim')) {
+        const animKey = isRight ? 'bullet-right-anim' : 'bullet-left-anim';
+        if (this.scene.anims.exists(animKey)) {
+            bullet.play(animKey);
+        } else if (this.scene.anims.exists('fire-bullet-anim')) {
             bullet.play('fire-bullet-anim');
         }
 

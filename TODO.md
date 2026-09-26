@@ -76,31 +76,62 @@
 - [x] **Dual Controls (WASD & Arrow Keys)**: Full movement and jump support using both `WASD` and `Arrow Keys`.
 - [x] **Interactive `ESC` Pause Menu**: Keyboard and mouse navigation with Resume, Restart Run, and Sound Toggle.
 - [x] **Accidental Reload Guard**: `beforeunload` browser protection against accidental speedrun loss.
+- [x] **Ground Blocks & Stage Tilesets Overhaul**:
+  - Preloaded and mapped new ground tilesets: `DIRT AND GRASS REMADE.png`, `cb template.png`, `grass template.png`, `cherry blossom blocks.png`, and `cherry blossom tree.png`.
+  - Refactored `MainStageScene` and `EnvironmentManager` to resolve all new tile GIDs seamlessly.
+- [x] **Dynamic JSON-Driven Tilemap Layer Stack**:
+  - Dynamically iterates over all tile layers in `map.layers` in their exact Tiled layer stack order.
+  - Automatically calculates order-aware rendering depths relative to ground and reads custom Tiled depth properties (`depth`, `zindex`, `layerdepth`).
+- [x] **Mountain Parallax & Atmospheric Perspective Background**:
+  - Configured `0.3x` horizontal parallax scrolling with vertical locking (`1.0x`) for distant depth.
+  - Implemented dynamic atmospheric perspective pixel processing (25% desaturation, 15% contrast reduction, 20% sky-tone shift, 100% opacity retained).
+- [x] **Animated Looping Molten Lava (`new lava.png`)**:
+  - Integrated 64x64 4-tile spritesheet (Row 1: Surface frames, Row 2: Block body frames).
+  - Built synchronized 300ms tile swap loop with per-tile initial phase preservation (Frame 1 <-> Frame 2).
+  - Integrated `new lava` hazard detection with custom player sinking lava death animation.
+- [x] **PipeMonster Custom Scale Property**:
+  - Added support for `scale` / `scalePercent` / `size` in Tiled (e.g. `100`, `80`, `150`) with auto-scaling collision box, resting pipe depth, and player proximity detection.
 - [x] **Air / Flying Mobs (`FlyingMob`)**: Configurable aerial patrol hazards with tile-based `distance` (1 = 1 tile / 32px), `axis` (`horizontal` / `vertical`), directional flight animations, stomping, blaster elimination, and optional shooting.
 - [x] **All Orbs Assets & Mechanics (Gravity Orbs, Orbs of Rage, Victory Orb)**:
   - Integrated dedicated 128x32 animated 4-frame spritesheets (`attack orb.png`, `gravity orb.png`, `victory orb.png`).
   - Implemented 10-collectible Gravity Orbs system to ground and trigger Phase 2 vulnerability for Elecking Boss.
   - Implemented Orbs of Rage boss projectile firing during Phase 2 ground patrol.
   - Implemented Orb of Victory spawning upon boss defeat with fanfare, portal emergence, and SurrealDB stage clear completion.
+- [x] **New Teleport Door (`door.png`)**:
+  - Added teleporter door asset (`door.png`) rendered on the ground with in-world static `[ E ]` prompt badge anchored above entrances.
+  - Integrated exit destination targeting (`doorExitX`, `doorExitY`), screen flash / cyan particle bursts, and seamless player repositioning.
+- [x] **Stage Obstacles & Hazards Suite**:
+  - Integrated `spike` obstacles with inner bounding box collision to prevent subpixel clipping.
+  - Implemented rotating 4-fireball `firebar-sprite` obstacles with custom angle velocity and radius.
+  - Added `new lava` molten animated hazards, `jumppad sprite` spring bounce mechanics, and destructible shattering wooden bridges.
+  - Implemented environmental wind force currents with vector particle flows.
+- [x] **Multi-Layer Parallax Background & Ambient Atmosphere**:
+  - Calibrated multi-layer depth & parallax scrolling: Sky (0.05x), Mountain (0.3x), Background (0.55x), Trees (0.75x), and Foreground (1.0x).
+  - Preloaded and mapped all stage scenery tilesets: Japanese Pagodas / Buildings (`japanese building`, `japanese_building_3`), Cherry Blossoms (`cherry blossom 2`, `cherry blossom 3`), Diverse Trees (`tree 1..4`), Flower Bushes, and Wells.
+  - Added atmospheric perspective color processing and ambient floating cherry blossom petal breeze particles in the background.
 
 ---
 
 ### ⏳ Active Development & Asset Pipeline
-- [ ] **1. Skeleton Bomb Minion Mob**: Add skeleton bomb mob as the summonable minion that the Elecking Boss spawns on the ground (max 2 waves per fight).
-- [ ] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
-- [ ] **4. New Checkpoint Asset**: Replace/upgrade the checkpoint banner and visual pole/flag assets.
-- [ ] **7. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
-- [ ] **8. New Bullet Sprite**: Upgrade the blaster projectile sprite and impact animations.
+- [ ] **1. Complete Boss Fight & Minions**:
+  - Add skeleton bomb minion mob spawned by Elecking Boss on the ground during battle (max 2 waves per fight).
+  - Polish Phase 1 cloud lightning/charge attacks and Phase 2 ground orb barrage/vulnerability windows.
+  - Finalize boss defeat transition, Victory Orb fanfare, and portal stage completion.
+- [x] **3. New Teleport Door**: Add new door asset and interaction logic for teleportation / level transitions.
+- [x] **4. New Checkpoint Asset**: Placed `checkpoint sprite.png` from `misc` on the ground at Checkpoint 1, 2, 3, and 4 locations with interactive activation tweens.
+- [x] **7. New Obstacles**: Implement new environmental hazards and platforming obstacles across the stage.
+- [x] **8. New Bullet Sprite**: Integrated `new bullet sprite.png` (64x64) with directional animations (row 1 left frames 0-1, row 2 right frames 2-3) and updated collision box.
 - [ ] **9. Redesign Stage Below First Smash Ground**: Overhaul and rebalance the level design in the lower stage section beneath the first smash ground.
 - [ ] **10. Totem Respawn Animation**: Add dedicated activation and revival animation sequence for the Totem of Undying.
 - [ ] **11. Gun Movement Effects (Walking & Falling)**: Add specialized walking and airborne/falling animation frames while holding the Blaster Gun.
-- [ ] **12. Improve Background**: Enhance multi-layer parallax backgrounds, atmospheric lighting, and world depth.
-- [ ] **13. UI Polish & Visual Glassmorphism**:
+- [ ] **12. Multi-Layer Background Parallax**: Implement seamless layered parallax scrolling for all background scenery assets and skyboxes without tile detachment.
+- [ ] **13. Performance Optimization (Eliminate Stuttering)**: Optimize tile rendering, particle emitters, texture filtering, and update loops to ensure silky smooth 60+ FPS without frame drops.
+- [ ] **14. UI Polish & Visual Glassmorphism**:
   - Modernize HUD design with crisp retro glassmorphism, responsive status bars, and vibrant equipment status cards.
   - Refine pause menu and overlay layouts, improving button hover effects, typography, and spacing.
   - Add micro-animations and smooth transition effects for banners (checkpoint notifications, respawn alerts, timer cues).
-- [ ] **14. Cloudflare Turnstile Verification Widget**: Add free Turnstile bot protection widget to start-run UI and validate Turnstile tokens in `SurrealService.startRun()`.
-- [ ] **15. Web3 Wallet Connection (EIP-712 / SIWE)**: Connect browser wallet (MetaMask, Phantom, Wagmi) to authenticate sessions and sign run verification proofs.
+- [ ] **15. Cloudflare Turnstile Verification Widget**: Add free Turnstile bot protection widget to start-run UI and validate Turnstile tokens in `SurrealService.startRun()`.
+- [ ] **16. Web3 Wallet Connection (EIP-712 / SIWE)**: Connect browser wallet (MetaMask, Phantom, Wagmi) to authenticate sessions and sign run verification proofs.
 
 ---
 
@@ -113,7 +144,7 @@
 ---
 
 ### 🎨 Gameplay Polish & World Expansion
-- [ ] **Fix after checking all dangling grey lines appearing on all the assets in the game**: Thoroughly audit and clean all sprite sheets, tile boundaries, and map object coordinates to eliminate faint grey lines and subpixel border artifacts.
+- [ ] **Fix Grey Lines & Edge Bleeding on Sprites**: Thoroughly audit and clean all sprite sheets, tile boundaries, texture bleed margins, and camera subpixel rounding to eliminate grey lines appearing on top of sprites.
 - [ ] **Map Expansion & Level 2**: Connect stage doors to secondary map sections or next level.
 - [ ] **Audio Assets**: Replace synthesized audio oscillator tones with dedicated sound effects and background music tracks.
 
