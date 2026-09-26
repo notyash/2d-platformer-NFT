@@ -659,7 +659,17 @@ export class EnvironmentManager {
                         'dandelion': 'dandelion',
                         'dandelion flower sprite': 'dandelion',
                         'plain-ground': 'plain-ground',
-                        'bush': 'bush'
+                        'bush': 'bush',
+                        'cherry blossom blocks': 'cherry blossom blocks',
+                        'bridge extra': 'bridge extra',
+                        'grass template': 'grass template',
+                        'cb template': 'cb template',
+                        'DIRT AND GRASS REMADE': 'DIRT AND GRASS REMADE',
+                        'cherry blossom tree': 'cherry blossom tree',
+                        'new lava': 'new lava',
+                        'gravity orb': 'gravity-orb',
+                        'attack tiles': 'attack-tiles',
+                        'temp platforms': 'temp-platforms'
                     };
 
                     const resolvedKey = tilesetKeyMap[tileset.name] || tileset.name;

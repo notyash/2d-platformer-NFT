@@ -875,20 +875,8 @@ export class EnemyManager {
                 return;
             }
 
-            this.scene.physics.add.existing(obj);
-            const monsterBody = obj.body as Phaser.Physics.Arcade.Body;
-            monsterBody.allowGravity = false; 
-            monsterBody.immovable = true; 
-            monsterBody.setSize(24, 20);
-            monsterBody.setOffset(4, 3);
-            
-            obj.setDepth(2.9);
-            obj.setTexture('mob-bonsai-gripper', 0);
-            if (this.scene.anims.exists('mob-bonsai-gripper-walk-l')) {
-                obj.play('mob-bonsai-gripper-walk-l');
-            }
-
             let popDuration = 200;
+            let scalePercent = 100;
             const rawObj = rawObjects[index];
             if (rawObj && rawObj.properties) {
                 const speedProp = rawObj.properties.find((p: any) => p.name && (
@@ -899,6 +887,35 @@ export class EnemyManager {
                 if (speedProp && speedProp.value !== undefined) {
                     popDuration = Number(speedProp.value);
                 }
+
+                const scaleProp = rawObj.properties.find((p: any) => p.name && (
+                    p.name.toLowerCase() === 'scale' || 
+                    p.name.toLowerCase() === 'scalepercent' ||
+                    p.name.toLowerCase() === 'size'
+                ));
+                if (scaleProp && scaleProp.value !== undefined) {
+                    const rawScale = Number(scaleProp.value);
+                    if (!isNaN(rawScale) && rawScale > 0) {
+                        scalePercent = rawScale;
+                    }
+                }
+            }
+
+            // Convert scale percent (e.g. 100 -> 1.0, 80 -> 0.8, 150 -> 1.5)
+            const scaleFactor = scalePercent > 2 ? scalePercent / 100 : (scalePercent <= 0 ? 1 : scalePercent);
+            obj.setScale(scaleFactor);
+
+            this.scene.physics.add.existing(obj);
+            const monsterBody = obj.body as Phaser.Physics.Arcade.Body;
+            monsterBody.allowGravity = false; 
+            monsterBody.immovable = true; 
+            monsterBody.setSize(24 * scaleFactor, 20 * scaleFactor);
+            monsterBody.setOffset(4 * scaleFactor, 3 * scaleFactor);
+            
+            obj.setDepth(2.9);
+            obj.setTexture('mob-bonsai-gripper', 0);
+            if (this.scene.anims.exists('mob-bonsai-gripper-walk-l')) {
+                obj.play('mob-bonsai-gripper-walk-l');
             }
 
             // Calculate the exact surface level of the topmost block of the pipe
@@ -923,11 +940,11 @@ export class EnemyManager {
                 }
             }
 
-            const halfH = (obj.displayHeight || 23) / 2;
+            const halfH = (obj.displayHeight || (23 * scaleFactor)) / 2;
             // Resting position: fully submerged inside pipe
-            const restingY = pipeSurfaceY + halfH + 8;
-            // Popped position: bottom of monster stays 4px inside the pipe rim so it never floats above
-            const poppedY = pipeSurfaceY - halfH + 4;
+            const restingY = pipeSurfaceY + halfH + (8 * scaleFactor);
+            // Popped position: bottom of monster stays inside the pipe rim so it never floats above
+            const poppedY = pipeSurfaceY - halfH + (4 * scaleFactor);
 
             obj.setPosition(obj.x, restingY);
             obj.setData('uniqueKey', uniqueKey);
@@ -935,6 +952,7 @@ export class EnemyManager {
             obj.setData('poppedY', poppedY);
             obj.setData('pipeSurfaceY', pipeSurfaceY);
             obj.setData('popDuration', popDuration);
+            obj.setData('scaleFactor', scaleFactor);
 
             this.pipeMonsters.add(obj);
             this.startMonsterCycle(obj);
@@ -1047,12 +1065,14 @@ export class EnemyManager {
         const poppedY = monster.getData('poppedY') as number;
         const pipeSurfaceY = (monster.getData('pipeSurfaceY') as number) || (restingY - 16);
 
+        const scaleFactor = (monster.getData('scaleFactor') as number) || 1;
+
         this.scene.time.delayedCall(hideTime, () => {
             if (!monster.active) return;
 
             const pBody = this.player.body as Phaser.Physics.Arcade.Body;
             const isPlayerAbovePipe = (
-                Math.abs(this.player.x - monster.x) < 30 &&
+                Math.abs(this.player.x - monster.x) < 30 * scaleFactor &&
                 pBody.bottom <= pipeSurfaceY + 6 &&
                 pBody.bottom >= pipeSurfaceY - 64
             );

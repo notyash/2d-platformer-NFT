@@ -62,10 +62,20 @@ export class MainStageScene extends Phaser.Scene {
         this.load.image('plainDungeon', 'assets/sprites/background/plainDungeon.png');
 
         this.load.image('cherry blossom', 'assets/sprites/background/cherry blossom.png');
+        this.load.image('cherry blossom tree', 'assets/sprites/background/cherry blossom tree.png');
+        this.load.image('cherry blossom blocks', 'assets/sprites/blocks/cherry blossom blocks.png');
+        this.load.image('grass template', 'assets/sprites/blocks/grass template.png');
+        this.load.image('cb template', 'assets/sprites/blocks/cb template.png');
+        this.load.image('DIRT AND GRASS REMADE', 'assets/sprites/blocks/DIRT AND GRASS REMADE.png');
+        this.load.image('bridge extra', 'assets/sprites/misc/bridge extra.png');
+        this.load.image('temp platforms', 'assets/sprites/boss/temp platforms.png');
+        this.load.image('gravity orb', 'assets/sprites/boss/gravity orb.png');
+        this.load.image('attack tiles', 'assets/sprites/boss/attack tiles.png');
         this.load.spritesheet('dandelion', 'assets/sprites/background/dandelion flower sprite.png', { frameWidth: 32, frameHeight: 32 });
         this.load.image('well', 'assets/sprites/blocks/well.png');
         this.load.image('water', 'assets/sprites/blocks/water.png');
         this.load.image('lava', 'assets/sprites/blocks/lava.png');
+        this.load.image('new lava', 'assets/sprites/blocks/new lava.png');
         this.load.image('bush', 'assets/sprites/background/bush.png');
         this.load.image('mountain', 'assets/sprites/background/mountain.png');
         this.load.spritesheet('32 files dungeon', 'assets/sprites/boss/32 files dungeon.png', { frameWidth: 32, frameHeight: 32 });
@@ -186,6 +196,9 @@ export class MainStageScene extends Phaser.Scene {
                 }
             }
         });
+
+        // Apply atmospheric perspective processing to mountain texture before creating tilemap layers
+        this.applyAtmosphericPerspectiveToMountainTexture();
 
         const map = this.make.tilemap({ key: 'stage1' });
         this.createLayers(map);
@@ -432,7 +445,7 @@ export class MainStageScene extends Phaser.Scene {
                 this.hazardsLayer, 
                 (_p, tile) => {
                     const t = tile as Phaser.Tilemaps.Tile;
-                    const isLava = t.tileset?.name === 'lava' || (t.index >= 2730 && t.index <= 2732);
+                    const isLava = t.tileset?.name === 'lava' || t.tileset?.name === 'new lava' || (t.index >= 2663 && t.index <= 2665) || (t.index >= 4053 && t.index <= 4056) || (t.index >= 2730 && t.index <= 2732);
                     this.player.die(isLava ? 'lava' : 'default');
                 }, 
                 (_p, tile) => {
@@ -442,7 +455,7 @@ export class MainStageScene extends Phaser.Scene {
                     const pBody = this.player.body as Phaser.Physics.Arcade.Body;
                     if (!pBody) return false;
 
-                    const isLava = t.tileset?.name === 'lava' || (t.index >= 2730 && t.index <= 2732);
+                    const isLava = t.tileset?.name === 'lava' || t.tileset?.name === 'new lava' || (t.index >= 2663 && t.index <= 2665) || (t.index >= 4053 && t.index <= 4056) || (t.index >= 2730 && t.index <= 2732);
                     const tileTop = t.pixelY;
                     const tileBottom = t.pixelY + t.height;
                     const tileLeft = t.pixelX;
@@ -642,6 +655,11 @@ export class MainStageScene extends Phaser.Scene {
         const largeTreeTileset = map.addTilesetImage('largeTree', 'largeTree');
         const grassTileset = map.addTilesetImage('grass', 'grass');
         const cherryBlossomTileset = map.addTilesetImage('cherry blossom', 'cherry blossom');
+        const cherryBlossomBlocksTileset = map.addTilesetImage('cherry blossom blocks', 'cherry blossom blocks');
+        const grassTemplateTileset = map.addTilesetImage('grass template', 'grass template');
+        const cbTemplateTileset = map.addTilesetImage('cb template', 'cb template');
+        const dirtAndGrassRemadeTileset = map.addTilesetImage('DIRT AND GRASS REMADE', 'DIRT AND GRASS REMADE');
+        const bridgeExtraTileset = map.addTilesetImage('bridge extra', 'bridge extra');
         const wellTileset = map.addTilesetImage('well', 'well');
         const waterTileset = map.addTilesetImage('water', 'water');
         const lavaTileset = map.addTilesetImage('lava', 'lava');
@@ -649,11 +667,16 @@ export class MainStageScene extends Phaser.Scene {
         const dandelionTileset = map.addTilesetImage('dandelion flower sprite', 'dandelion');
         const movingPlatformTileset = map.addTilesetImage('moving-platform', 'moving-platform');
         const woodenPlatformTileset = map.addTilesetImage('wooden moving platform', 'wooden moving platform');
-        const jumpPadTileset = map.addTilesetImage('jump-pad', 'jump-pad-img');
+        const jumpPadTileset = map.addTilesetImage('jump-pad', 'jump-pad-img') || map.addTilesetImage('jumppad sprite', 'jump-pad-img');
         const mountainTileset = map.addTilesetImage('mountain', 'mountain');
         const dungeon32Tileset = map.addTilesetImage('32 files dungeon', '32 files dungeon');
         const dungeon64Tileset = map.addTilesetImage('64 files dungeon', '64 files dungeon');
         const cloudVariationTileset = map.addTilesetImage('cloud variation', 'cloud variation');
+        const tempPlatformsTileset = map.addTilesetImage('temp platforms', 'temp platforms');
+        const gravityOrbTileset = map.addTilesetImage('gravity orb', 'gravity orb');
+        const attackTilesTileset = map.addTilesetImage('attack tiles', 'attack tiles');
+        const cherryBlossomTreeTileset = map.addTilesetImage('cherry blossom tree', 'cherry blossom tree');
+        const newLavaTileset = map.addTilesetImage('new lava', 'new lava');
         const plainDungeonTileset = map.addTilesetImage('plainDungeon', 'plainDungeon') || map.addTilesetImage('plain-dungeon', 'plain-dungeon');
         const plainGroundTileset = map.addTilesetImage('plainGround', 'plainGround') || map.addTilesetImage('plain-ground', 'plain-ground');
         const spikeTileset = map.addTilesetImage('spike', 'spike');
@@ -668,9 +691,16 @@ export class MainStageScene extends Phaser.Scene {
             largeTreeTileset,
             grassTileset,
             cherryBlossomTileset,
+            cherryBlossomTreeTileset,
+            cherryBlossomBlocksTileset,
+            grassTemplateTileset,
+            cbTemplateTileset,
+            dirtAndGrassRemadeTileset,
+            bridgeExtraTileset,
             wellTileset,
             waterTileset,
             lavaTileset,
+            newLavaTileset,
             bushTileset,
             dandelionTileset,
             movingPlatformTileset,
@@ -680,6 +710,9 @@ export class MainStageScene extends Phaser.Scene {
             dungeon32Tileset,
             dungeon64Tileset,
             cloudVariationTileset,
+            tempPlatformsTileset,
+            gravityOrbTileset,
+            attackTilesTileset,
             plainDungeonTileset,
             plainGroundTileset,
             spikeTileset
@@ -714,36 +747,132 @@ export class MainStageScene extends Phaser.Scene {
 
         this.allTilesets = allTilesets;
 
-        map.createLayer('Sky', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Sky', 0));
-        map.createLayer('Trees', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Trees', 1));
-        map.createLayer('Background', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Background', 2));
+        // Dynamically create all tile layers from the stage JSON in their exact layer stack order
+        const tileLayers = (map.layers || []).filter(l => !(l as any).type || (l as any).type === 'tilelayer');
+
+        tileLayers.forEach((layerData, idx) => {
+            const layerName = layerData.name;
+            const lowerName = layerName.toLowerCase();
+
+            const created = map.createLayer(layerName, allTilesets, 0, 0);
+            if (!created) return;
+            const layer = created as Phaser.Tilemaps.TilemapLayer;
+
+            // Set visibility and opacity from stage JSON
+            if (layerData.visible !== undefined) {
+                layer.setVisible(layerData.visible);
+            }
+            if (layerData.alpha !== undefined) {
+                layer.setAlpha(layerData.alpha);
+            } else if ((layerData as any).opacity !== undefined) {
+                layer.setAlpha((layerData as any).opacity);
+            }
+
+            // Depth calculation: Tiled custom property -> default order-aware depth
+            const fallbackDepth = this.getDefaultLayerDepth(layerName, idx, map.layers);
+            const depth = this.getTiledLayerDepth(map, layerName, fallbackDepth);
+            layer.setDepth(depth);
+
+            // Parallax scroll factor (Tiled properties -> default parallax for distant layers like Mountain)
+            const scrollFactor = this.getLayerScrollFactor(map, layerData);
+            if (scrollFactor.x !== 1 || scrollFactor.y !== 1) {
+                layer.setScrollFactor(scrollFactor.x, scrollFactor.y);
+                layer.setCullPadding(8, 8);
+            }
+
+            // Bind collision & core references
+            if (lowerName === 'ground') {
+                this.groundLayer = layer;
+                this.groundLayer.setCollisionByExclusion([-1]);
+            } else if (lowerName === 'smashground' || lowerName === 'smash') {
+                this.smashLayer = layer;
+                this.smashLayer.setCollisionByExclusion([-1]);
+            } else if (lowerName === 'onewayplatforms' || lowerName === 'oneway') {
+                this.oneWayLayer = layer;
+                this.oneWayLayer.setCollisionByExclusion([-1]);
+            } else if (lowerName === 'hazards' || lowerName === 'hazard') {
+                this.hazardsLayer = layer;
+                this.hazardsLayer.setCollisionByExclusion([-1]);
+            }
+        });
+
+        // Initialize 2-frame automated animated lava tiles loop
+        this.setupAnimatedLavaTiles(map);
+    }
+
+    private setupAnimatedLavaTiles(map: Phaser.Tilemaps.Tilemap) {
+        const newLavaTileset = map.tilesets.find(t => t.name === 'new lava' || String((t as any).image || '').includes('new lava'));
+        if (!newLavaTileset) return;
+
+        const firstGid = newLavaTileset.firstgid;
+        // Surface: row 1 (frames 0 & 1)
+        const surfaceGid1 = firstGid;
+        const surfaceGid2 = firstGid + 1;
+        // Block: row 2 (frames 2 & 3)
+        const blockGid1 = firstGid + 2;
+        const blockGid2 = firstGid + 3;
+
+        const layersWithLava: { surfaceTiles: Phaser.Tilemaps.Tile[], blockTiles: Phaser.Tilemaps.Tile[] }[] = [];
+
+        map.layers.forEach(layerData => {
+            const tilemapLayer = layerData.tilemapLayer;
+            if (!tilemapLayer) return;
+
+            const surfaceTiles: Phaser.Tilemaps.Tile[] = [];
+            const blockTiles: Phaser.Tilemaps.Tile[] = [];
+
+            tilemapLayer.forEachTile(tile => {
+                if (tile.index === surfaceGid1 || tile.index === surfaceGid2) {
+                    surfaceTiles.push(tile);
+                } else if (tile.index === blockGid1 || tile.index === blockGid2) {
+                    blockTiles.push(tile);
+                }
+            });
+
+            if (surfaceTiles.length > 0 || blockTiles.length > 0) {
+                layersWithLava.push({ surfaceTiles, blockTiles });
+            }
+        });
+
+        if (layersWithLava.length === 0) return;
+
+        this.time.addEvent({
+            delay: 300,
+            loop: true,
+            callback: () => {
+                layersWithLava.forEach(({ surfaceTiles, blockTiles }) => {
+                    for (let i = 0; i < surfaceTiles.length; i++) {
+                        const tile = surfaceTiles[i];
+                        tile.index = (tile.index === surfaceGid1) ? surfaceGid2 : surfaceGid1;
+                    }
+                    for (let i = 0; i < blockTiles.length; i++) {
+                        const tile = blockTiles[i];
+                        tile.index = (tile.index === blockGid1) ? blockGid2 : blockGid1;
+                    }
+                });
+            }
+        });
+    }
+
+    private getDefaultLayerDepth(layerName: string, index: number, allLayers: any[]): number {
+        const lowerName = layerName.toLowerCase();
         
-        const transparentLayer = map.createLayer('Transparent', allTilesets, 0, 0);
-        if (transparentLayer) {
-            transparentLayer.setDepth(this.getTiledLayerDepth(map, 'Transparent', 2.7));
+        // Find index of main ground/gameplay layer in map.layers
+        const groundIndex = allLayers.findIndex(l => l.name && l.name.toLowerCase() === 'ground');
+        const effectiveGroundIndex = groundIndex > 0 ? groundIndex : 6;
+
+        if (lowerName === 'ground') return 3.0;
+        if (lowerName === 'smashground' || lowerName === 'smash') return 3.1;
+        if (lowerName === 'onewayplatforms' || lowerName === 'oneway') return 3.2;
+        if (lowerName === 'hazards' || lowerName === 'hazard') return 3.3;
+
+        // Background layers (layers below ground stack)
+        if (index < effectiveGroundIndex) {
+            return (index / effectiveGroundIndex) * 2.85;
         }
 
-        this.groundLayer = map.createLayer('Ground', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
-        this.groundLayer.setDepth(this.getTiledLayerDepth(map, 'Ground', 3));
-        this.groundLayer.setCollisionByExclusion([-1]);
-
-        this.smashLayer = (map.createLayer('SmashGround', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
-        if (this.smashLayer) {
-            this.smashLayer.setDepth(this.getTiledLayerDepth(map, 'SmashGround', 3.1));
-            this.smashLayer.setCollisionByExclusion([-1]);
-        }
-
-        this.oneWayLayer = map.createLayer('OneWayPlatforms', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
-        this.oneWayLayer.setDepth(this.getTiledLayerDepth(map, 'OneWayPlatforms', 3.2));
-        this.oneWayLayer.setCollisionByExclusion([-1]);
-
-        this.hazardsLayer = (map.createLayer('Hazards', allTilesets, 0, 0) as Phaser.Tilemaps.TilemapLayer) || undefined;
-        if (this.hazardsLayer) {
-            this.hazardsLayer.setDepth(this.getTiledLayerDepth(map, 'Hazards', 3.3));
-            this.hazardsLayer.setCollisionByExclusion([-1]);
-        }
-
-        map.createLayer('Foreground', allTilesets, 0, 0)?.setDepth(this.getTiledLayerDepth(map, 'Foreground', 8));
+        // Foreground / overlay layers (layers above ground stack)
+        return 8.0 + (index - effectiveGroundIndex) * 0.1;
     }
 
     private getTiledLayerDepth(map: Phaser.Tilemaps.Tilemap, layerName: string, fallbackDepth: number): number {
@@ -766,6 +895,118 @@ export class MainStageScene extends Phaser.Scene {
             }
         }
         return fallbackDepth;
+    }
+
+    private getLayerScrollFactor(_map: Phaser.Tilemaps.Tilemap, layerData: any): { x: number, y: number } {
+        const name = (layerData.name || '').toLowerCase();
+        
+        // 1. Check native Tiled parallax properties
+        let sx = layerData.parallaxx !== undefined ? Number(layerData.parallaxx) : undefined;
+        let sy = layerData.parallaxy !== undefined ? Number(layerData.parallaxy) : undefined;
+
+        // 2. Check custom properties from Tiled
+        const rawProps = layerData.properties;
+        if (rawProps && Array.isArray(rawProps)) {
+            const pxProp = rawProps.find((p: any) => p.name && (
+                p.name.toLowerCase() === 'parallaxx' || 
+                p.name.toLowerCase() === 'scrollfactorx' ||
+                p.name.toLowerCase() === 'parallax_x' ||
+                p.name.toLowerCase() === 'scroll_factor_x'
+            ));
+            if (pxProp && pxProp.value !== undefined) sx = Number(pxProp.value);
+
+            const pyProp = rawProps.find((p: any) => p.name && (
+                p.name.toLowerCase() === 'parallaxy' || 
+                p.name.toLowerCase() === 'scrollfactory' ||
+                p.name.toLowerCase() === 'parallax_y' ||
+                p.name.toLowerCase() === 'scroll_factor_y'
+            ));
+            if (pyProp && pyProp.value !== undefined) sy = Number(pyProp.value);
+
+            const pAll = rawProps.find((p: any) => p.name && (
+                p.name.toLowerCase() === 'parallax' || 
+                p.name.toLowerCase() === 'scrollfactor'
+            ));
+            if (pAll && pAll.value !== undefined) {
+                if (sx === undefined) sx = Number(pAll.value);
+                if (sy === undefined) sy = Number(pAll.value);
+            }
+        }
+
+        // 3. Sensible defaults if not explicitly set in Tiled
+        if (name === 'mountain') {
+            return { x: sx ?? 0.3, y: sy ?? 1 };
+        }
+
+        return { x: sx ?? 1, y: sy ?? 1 };
+    }
+
+    private applyAtmosphericPerspectiveToMountainTexture() {
+        const mountainTextureKeys = ['mountain', 'assets/sprites/background/mountain.png'];
+        const targetKey = mountainTextureKeys.find(k => this.textures.exists(k));
+        if (!targetKey) return;
+
+        const texture = this.textures.get(targetKey);
+        const sourceImage = texture.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+        if (!sourceImage || !sourceImage.width || !sourceImage.height) return;
+
+        // Create an offscreen canvas to process the pixels
+        const canvas = document.createElement('canvas');
+        canvas.width = sourceImage.width;
+        canvas.height = sourceImage.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.drawImage(sourceImage, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+
+        // Atmospheric perspective parameters:
+        // 1. Desaturate colors by ~25%
+        // 2. Reduce contrast by ~15%
+        // 3. Shift palette toward sky atmospheric blue (#8cb2d4 / [140, 178, 212]) by ~20%
+        // 4. Preserve 100% opacity (no alpha fading)
+        const skyR = 140, skyG = 178, skyB = 212;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3];
+            if (a === 0) continue;
+
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // 1. Desaturate ~25%
+            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            let nr = r * 0.75 + gray * 0.25;
+            let ng = g * 0.75 + gray * 0.25;
+            let nb = b * 0.75 + gray * 0.25;
+
+            // 2. Reduce contrast ~15%
+            nr = (nr - 128) * 0.85 + 128;
+            ng = (ng - 128) * 0.85 + 128;
+            nb = (nb - 128) * 0.85 + 128;
+
+            // 3. Shift toward sky atmospheric blue ~20%
+            nr = Math.min(255, Math.max(0, Math.round(nr * 0.80 + skyR * 0.20)));
+            ng = Math.min(255, Math.max(0, Math.round(ng * 0.80 + skyG * 0.20)));
+            nb = Math.min(255, Math.max(0, Math.round(nb * 0.80 + skyB * 0.20)));
+
+            data[i] = nr;
+            data[i + 1] = ng;
+            data[i + 2] = nb;
+            // Full opacity retained
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+
+        // Update texture in Phaser TextureManager
+        mountainTextureKeys.forEach(k => {
+            if (this.textures.exists(k)) {
+                this.textures.remove(k);
+            }
+            this.textures.addCanvas(k, canvas);
+        });
     }
 
     private createAnimations() {
